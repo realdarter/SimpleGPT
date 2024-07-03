@@ -23,8 +23,8 @@ class TextDataset(Dataset):
 
         return torch.tensor(tokenized_text, dtype=torch.long)
 
-# Function to initialize GPT-2 model from scratch
-def initialize_gpt2_model():
+# Function to download the GPT-2 model (124M)
+def download_gpt2_124M(save_directory):
     model_name = 'gpt2'
     model = GPT2LMHeadModel.from_pretrained(model_name)
     tokenizer = GPT2Tokenizer.from_pretrained(model_name)
@@ -32,16 +32,27 @@ def initialize_gpt2_model():
     # Add a padding token to the tokenizer
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
-    # Resize model embeddings to accommodate the new pad token
-    model.resize_token_embeddings(len(tokenizer))
+    # Save the model and tokenizer to the specified directory
+    model.save_pretrained(save_directory)
+    tokenizer.save_pretrained(save_directory)
 
-    return model, tokenizer
+    print(f"GPT-2 model (124M) downloaded and saved in {save_directory}")
 
 # Function to tokenize and train on cleaned.csv
-def train_on_dataset(model, tokenizer, dataset_path, num_epochs=1, batch_size=8, save_every=500):
+def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=8, save_every=500):
     # Check if GPU is available and use it if possible
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+
+    # Load the model and tokenizer
+    model = GPT2LMHeadModel.from_pretrained(model_directory)
+    tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
+
+    # Add a padding token to the tokenizer
+    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+
+    # Resize model embeddings to accommodate the new pad token
+    model.resize_token_embeddings(len(tokenizer))
 
     # Move the model to the specified device (GPU or CPU)
     model.to(device)
@@ -112,10 +123,14 @@ def train_on_dataset(model, tokenizer, dataset_path, num_epochs=1, batch_size=8,
     model.save_pretrained(model_directory)
     tokenizer.save_pretrained(model_directory)
 
-def test_input(model, tokenizer, prompt_text, temperature=0.7):
+def test_input(model_directory, prompt_text, temperature=0.7):
     # Check if GPU is available and use it if possible
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+
+    # Load the trained model and tokenizer
+    model = GPT2LMHeadModel.from_pretrained(model_directory)
+    tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
 
     # Move the model to the specified device (GPU or CPU)
     model.to(device)
@@ -160,13 +175,14 @@ if __name__ == "__main__":
     save_directory = "checkpoint/run1"
     dataset_path = "cleaned.csv"
 
-    # Step 1: Initialize GPT-2 model and tokenizer from scratch
-    model, tokenizer = initialize_gpt2_model()
+    # Step 1: Download GPT-2 model (124M) if not already downloaded
+    if not os.path.exists(save_directory):
+        download_gpt2_124M(save_directory)
 
     # Step 2: Train on dataset
-    train_on_dataset(model, tokenizer, dataset_path, num_epochs=10, batch_size=4, save_every=500)
+    train_on_dataset(save_directory, dataset_path, num_epochs=0, batch_size=4, save_every=500)
 
     # Step 3: Test input
     while True:
         inp = input("Ask Question: ")
-        test_input(model, tokenizer, inp)
+        test_input(save_directory, inp)

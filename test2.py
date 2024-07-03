@@ -5,7 +5,11 @@ import pandas as pd
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from torch.utils.data import DataLoader, Dataset
 
+# Special tokens
+
+
 class TextDataset(Dataset):
+    """Custom dataset class for text data."""
     def __init__(self, texts, tokenizer, max_length=512):
         self.texts = texts
         self.tokenizer = tokenizer
@@ -23,9 +27,8 @@ class TextDataset(Dataset):
 
         return torch.tensor(tokenized_text, dtype=torch.long)
 
-# Function to initialize GPT-2 model from scratch
-def initialize_gpt2_model():
-    model_name = 'gpt2'
+def initialize_gpt2_model(model_name='gpt2'):
+    """Initialize a GPT-2 model and tokenizer from scratch."""
     model = GPT2LMHeadModel.from_pretrained(model_name)
     tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 
@@ -37,19 +40,14 @@ def initialize_gpt2_model():
 
     return model, tokenizer
 
-# Function to tokenize and train on cleaned.csv
-def train_on_dataset(model, tokenizer, dataset_path, num_epochs=1, batch_size=8, save_every=500):
-    # Check if GPU is available and use it if possible
+def train_on_dataset(model, tokenizer, dataset_path, num_epochs=1, batch_size=8, save_every=100, save_directory="checkpoint"):
+    """Train the model on the provided dataset."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # Move the model to the specified device (GPU or CPU)
     model.to(device)
-
-    # Load the dataset using Pandas
     df = pd.read_csv(dataset_path)
 
-    # Create a Dataset and DataLoader
     dataset = TextDataset(df['context'].tolist(), tokenizer)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
@@ -63,23 +61,17 @@ def train_on_dataset(model, tokenizer, dataset_path, num_epochs=1, batch_size=8,
         start_time = time.time()
 
         for batch_idx, batch in enumerate(dataloader):
-            # Move batch to device
             inputs = batch.to(device)
-
-            # Labels are shifted inputs
             labels = inputs.clone()
 
-            # Model forward pass
             outputs = model(inputs, labels=labels)
             loss = outputs.loss
             total_loss += loss.item()
 
-            # Backward pass and optimization
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
 
-            # Print current progress every 50 batches
             if (batch_idx + 1) % 50 == 0 or (batch_idx + 1) == total_batches:
                 elapsed_time = time.time() - start_time
                 batches_done = batch_idx + 1
@@ -92,9 +84,8 @@ def train_on_dataset(model, tokenizer, dataset_path, num_epochs=1, batch_size=8,
                       f"Elapsed Time: {elapsed_time:.2f} sec, "
                       f"ETA: {estimated_time_remaining:.2f} sec remaining")
 
-            # Save model checkpoint every 'save_every' batches
             if (batch_idx + 1) % save_every == 0 or (batch_idx + 1) == total_batches:
-                checkpoint_dir = os.path.join(model_directory, "checkpoint")
+                checkpoint_dir = os.path.join(save_directory, "checkpoint")
                 if not os.path.exists(checkpoint_dir):
                     os.makedirs(checkpoint_dir)
                 model.save_pretrained(checkpoint_dir)
@@ -103,70 +94,76 @@ def train_on_dataset(model, tokenizer, dataset_path, num_epochs=1, batch_size=8,
 
         end_time = time.time()
         epoch_duration = end_time - start_time
-
         avg_loss = total_loss / total_batches
         print(f"Epoch {epoch+1} completed. Average Loss: {avg_loss:.4f}")
         print(f"Time taken for epoch {epoch+1}: {epoch_duration:.2f} seconds")
 
-    # Save final model after training
-    model.save_pretrained(model_directory)
-    tokenizer.save_pretrained(model_directory)
+    model.save_pretrained(save_directory)
+    tokenizer.save_pretrained(save_directory)
 
 def test_input(model, tokenizer, prompt_text, temperature=0.7):
-    # Check if GPU is available and use it if possible
+    """Generate text based on a prompt using the trained model."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # Move the model to the specified device (GPU or CPU)
     model.to(device)
+    input_ids = tokenizer.encode(f" {prompt_text} ", return_tensors='pt').to(device)
 
-    # Tokenize the input text
-    input_ids = tokenizer.encode(prompt_text, return_tensors='pt').to(device)
-
-    # Generate text using the model
     max_length = 100
     eos_token_id = tokenizer.eos_token_id
-
-    # Ensure the eos_token_id is in the model's config
     model.config.pad_token_id = eos_token_id
-
-    # Generate attention mask
     attention_mask = torch.ones(input_ids.shape, device=device)
 
-    # Generate text
     beam_output = model.generate(
         input_ids=input_ids,
         attention_mask=attention_mask,
         max_length=max_length,
-        num_beams=5,  # Increase num_beams for better diversity
+        num_beams=5,
         no_repeat_ngram_size=2,
         early_stopping=True,
         eos_token_id=eos_token_id,
         pad_token_id=eos_token_id,
         temperature=temperature,
-        do_sample=True  # Ensure do_sample is set to True
+        do_sample=True
     )
 
-    # Decode the generated output
-    decoded_beam = tokenizer.decode(beam_output[0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
+    generated_texts = []
+    for beam_idx, beam in enumerate(beam_output):
+        # Decode output without skipping special tokens initially
+        decoded_beam = tokenizer.decode(beam, skip_special_tokens=False, clean_up_tokenization_spaces=True)
+        
+        # Split decoded beam into tokens
+        tokens = decoded_beam.split()
+        
+        # Check if '<|endoftext|>' token is in tokens
+        has_endoftext = ('<|endoftext|>' in tokens)
 
-    # Print the final generated output
-    print("Beam Output:")
-    print(decoded_beam.replace('[NextLine]', '\n'))  # Replace [NextLine] tokens with newlines
+        # Print tokens for inspection
+        print(f"Tokens for Beam {beam_idx + 1}:")
+        print(tokens)
 
-# Main function
+        generated_texts.append(decoded_beam.replace('[NextLine]', '\n'))
+
+        print(f"Beam {beam_idx + 1}:")
+        print(f" {prompt_text}  {generated_texts[-1]}")
+        print(f"Has endoftext token: {has_endoftext}")
+
+    return generated_texts
+
+
 if __name__ == "__main__":
     print("Running Code")
-    save_directory = "checkpoint/run1"
     dataset_path = "cleaned.csv"
+    save_directory = "checkpoint/run2"
 
-    # Step 1: Initialize GPT-2 model and tokenizer from scratch
-    model, tokenizer = initialize_gpt2_model()
+    model, tokenizer = initialize_gpt2_model('gpt2')
+    eos_token = tokenizer.eos_token
+    eos_token_id = tokenizer.eos_token_id
 
-    # Step 2: Train on dataset
-    train_on_dataset(model, tokenizer, dataset_path, num_epochs=10, batch_size=4, save_every=500)
+    print(f"End of text token: {eos_token}")
+    print(f"End of text token ID: {eos_token_id}")
+    train_on_dataset(model, tokenizer, dataset_path, num_epochs=0, batch_size=4, save_every=100, save_directory=save_directory)
 
-    # Step 3: Test input
     while True:
         inp = input("Ask Question: ")
         test_input(model, tokenizer, inp)
