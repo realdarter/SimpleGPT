@@ -1,3 +1,1027 @@
 context,reply
-:5_FeelsReEeEeE:,Yay
-He share my colour I'm gonna uwu,Wo0a
+@beef also do you want food,i wanna make beef a infinite toilet hole
+Runaway studios,if there is gon be wall building systems hmu ive already got one in the works
+Scripting is hard,not really
+Lemme rephrase that,just gotta find where to start
+Scripting is hard if you dont know what your doing like me : ),dont learn to script
+Right now,"say, my goal is to make a simple fighting game"
+And i have alot of debugging,"where would you start? well fighting, look up how to make swords, then look up how to do countdowns, etc"
+How did you start?,dont need to know anything
+Thats what im doin rn,"but, id say, the way i found out how to script is because of my first full game, gift collecting simulator"
+dont try to make giant games at first,exactly
+start small,"like for gcs all it was, was just a basic touch a gift, get cash, unlock a area repeat"
+How do you make guis,okay ill just do a quick rundown
+Not collide with each other when screens change,Frame.Visible = false
+Like what i mean is if you alter the screen such as minimize or make it thinner the guis sometimes overlap,these a thing called zindex
+im working on 4 games at the same time 0_0,theres*
+Zindex?,sucks that i dont have image perms aa
+Ikr,hop over to media
+Ye,"think of zindex as a queue, but in reverse"
+Xedniz,"so say there is 10 people in a queue, the 10th person would be served first, so that frame will show up first, if the zindex is 9 then that frame will show up 2nd, etc"
+Aight thnks guys,dont worry dude i was once at your point
+Aight,"dont come to me when you need help with oop, im still learning that lol"
+Hi,@beef need script man
+im havingOSTERDOG bruh do it,😳
+bri ish,yo mama simulator contributions when?
+(i didnt),Im busyyssyy
+i,its damn good with friends
+is it intentional that everytime you die you unequip everything,its a bug
+it takes forever to elvel up,m
+i dont know where to go after the lvl 15 enemies,but its super fast after that
+like the supersonic boom attack,its only on public servers for some reason
+did you crash the server wtf @beef,i get no lag after playing it for a bit
+i went mage because that was the meta in the old game,"mage, kunai or priest if your a team guy"
+he used to be chill but i guess taking off socks is against the rules or something,yeah
+i no longer have contributor or retired role or any perms,WOW
+so they probably took it personally,thats almost as bad as the eggrypted thing
+i think the one time humblechild accid posted a leak i just said ban him,Yeah ive been talking alot recently with biscuit about the tds stuff
+what does biscuit do now i havent talked to him in a while,working on a game with me
+oof,that would be good to add to my tds content cop video
+True,deadass i do scripting for free
+so I was gonna ask him to code for this,oh alr
+Hes ok at art,yeahh soder
+Wdym?,he went from acting pretty normal to flexing his contrib role and qa tester perks
+yeah def,I don't have anything against most furries (hell i have like 10 friends who are furries) but you dont need to go around acting like your roleplaying where ever you go
+This is true,"Thanks, took me 2334 hours"
+I forgor,@beef the scripts in run from beef are so old no wonder why its not loading
+the lag is real,ive learned a lot about memory leaks since then
+if you wanna go ahead lol,too much unreadable code
+So it goes into script?,you can script with it yes but its not manditory
+Ok,go back to general now lol
+scripter ^,woow
+I was in the process of making the towers work as modules to store all their level info with getter functions for stats,mhm
+Spoop wrote that code (the gamecontroller client script and tower and enemy stuff) so I never was able to read through and figure out why things broke as a result of this,yeah ill be able to help with that
+Basically the current task at hand is making the game work as it did before because towers don’t attack due to health bars not being set properly anymore,has helped in cases like this before
+I’m at dinner now so I can let you know the scripts with problems after. It’s just making things compatible I believe,alr
+God bless. I have been so busy with my cs work I have felt so bad,yeah im not doing too much irl rn as im taking this year off + the options near me for college/uni aren't great
+what happened to ug development 💀,idrk
+havent got around to organizjng it,all of them want to work on another game rn and i only really need to do one thing in that which is a simple bhop-like system
+oof,scripting new things for ug is pretty simple but the in game ui code is completely different from the lobby ui code and i REALLY dont want to rewrite the in-game ui code
+let me find the game link,my lobby code has a core ui framework and modules for each type of ui
+we only have the basic ui for that,makes sense
+"still wasnt sure how the upgrades costs, placement, and values for the animations should be located, exodia manually put some of the values with the attribute functionality",> right now its using tweens on the server whoch probably isnt performance friendly yeah that was the main lag cause in UG
+something like this is what we were heading towards as attributes were being used when I joined. There is a folder of tower modules which was going to serve as an interface for each tower. Only had one for the starting tower at the moment. Edit this code as you'd like as I am fine using a better system. Rather have efficiency and not bad code lol,ye
+Been using more C# and Java lately both for class and Unity projects so having the static keyword is nice for things,attributes are also stupid fast
+makes sense why they'd be quick then,def
+"at least we get gradual typing with Luau, if Roblox kept using Lua 5.1 rather than rewriting its interpreter we wouldn't have that luxury",mhm
+"Depends how you use them. Modules allow for the closest thing to classes in Lua (it uses prototypal inheritance which you'd only ever encounter if you've used javascript). My most frequent usage of them is like a struct, interface, or like a trait/mixin",done a bit in javascript so ik
+"I have learned about prototypal inheritance, and also inheritances weakness in general so it kinda makes me dislike using them. I mean using metatables are fun and all but inheritance still presents issues","funny enough my most recent project called ""good tycoon"" uses inheritance a lot"
+"I mean not that it's a bad thing, especially when you don't have good alternatives. However, after using Rust I must say structs are really nice and still allow you to design functions with default and custom implementation. I don't know if we can really do that with Roblox",not really unless you use a type kinda like a struct
+In the sense of a tycoon game I feel it works because you could probably make tycoons a class object which is independent for each player and edit it as you please,local table: {foo: number} = { -- roblox screams at you if foo is not a value in this table }
+"Oh yeah, typing tables, since I think they are different from arrays. I wish we could do that still though. From my understanding many devs want this","with lua being the first language i learned, realising that other languages have multiple types of tables really confused me at first lol"
+"Yeah but then you realize that hashmaps, arrays, linked lists, etc aren't that bad and you wish you could have them without making them yourself",true
+"Heck we don't even get switch statements, try statements, or pattern matching (yes I sneaked this in here if you like rust or ocaml. Pattern matching is great!)","tables are very ambiguous and nothing is stoping you from doing the following evil scripting method ``lua { [1] = ""something"", [""hello""] = ""something else"" } ``"
+it makes creating dictionaries better and more runtime-secure in my opinion,you can do this type table = { [number]: any }
+But still I get that generics are more internal so like an 8 yo has 1 less thing to worry about but being able to use them would be NICE,yeah i spent days learning the luau type system and theres a lot of cool things you can do with it
+"Although the interpreter is backwards compatible down to Lua 5.1, so maybe this can't be done?",as in like ``lua function something<T>(object: T): T stuff end ``
+<T>,yeah luau has that
+to be honest,no im all self taught so some terms i dont really know
+welcome to a great world of education in college. If you pursue a cs degree (I highly recommend over game design if this is what you want to do as a job),yeah ive never really wanted to pursue just game design
+It's just the pay that is an issue,nice
+"but like you can spend 2 years on a game in unity/unreal, post it to steam for $100, and make no money",i haven't counted how many languages i know but i think its nearly 10 as well lol
+which isn't a lot but is much more promising then making a steam game solo without a budget,yeah
+I could be forgetting something but these are the ones I remember most,"oh wait i think this is what you mean (ignore the first key ""f"")"
+yeah to my knowledge Luau doesn't support support generics or static typing for tables like you could with Array<T>,Since HTML/CSS/JS are so intertwined i call it just all one language
+valid,on my website lol
+HTML is a scripting language too so it's like.. 0.5?,kinda
+It's not turing complete,its more closer to markdown but markdown also supports html
+Which Lua is also considered a scripting language due to it missing features such as the one I mentioned,"brain completely passed over this message, that screenshot is something you can do in luau"
+yeah but like what I mean is that you can't do something like `` local intArray: number = {} -- this data structure can only include numbers in it ``,you can do that
+does this actually work,yes
+this makes me happy,one thing i HATE about luau is creating types for models
+also,this
+Why is it like this,i wish you could just do like
+or something along those lines,like in java? class customPart extends Part
+something where I can make customs methods for already existing classes and do like Part.MyFunc for example,oh yeah
+"like I am forgetting why I wanted this to be a thing. But like I know I was like ""this could be useful right now"" at some point",I THINK you can kinda (and i mean kinda) do something like that by encapsulating a part into a custom class like ExtendedPart.new(part):method()
+yeah but my issue is I with metatables let us work around that and just edit the part itself,OH
+(Currently making a custom part class like that is the only way iirc??),i mean __newindex
+just __index.. kinda,"think of __index, \_\_newindex kinda like events but for tables"
+It's been a while since checking the api,exactly
+The exact stuff is a tad fuzzy since it's been a bit,theres some old code i wrote somewhere that abuses this functionality to make a table that saves every time something is added to it (without having to use a setter/getter)
+that code,yeah
+I like writing my own data code,theres so many ways to do datastores it actually gets annoying
+"It's good and I think every dev should do it, as relying on ds2 isn't helpful in my opinion",i tend to just use profileservice cause im lazy
+It's a near-perfect system yes,but ive written my own data handler
+"I try to write my own, albeit not perfect, data handling code as I want to improve at it so I can just be better at it (plus helps when I make all a commission's game code)",this is the magic line
+oh epic,i used it in universal guardians with about 300 players and had no issues
+source code leaked,leeakk!!
+we need to beat tds popularity upon release,this is stuff lildisquit says
+💀,they're weird but most of the time they work
+sci fi,this is my favourite script in all of good tycoon
+is it supposed to be a sequel or something,the one we were working on
+this is hilarious,every single conveyor has to have this script
+you could make a tag of sum sort to mark something as a conveyor and set everyone in one script looping through the tycoon's descendants,yeah
+oh i didn't see that,yeah thats why i just have the script in every conveyor
+true,"good tycoon isn't intended to be good looking, i made the game as a joke lol"
+yall wanna see some of my years old code for a button sim I am trying to revive 30 minutes at a time a day (if even) because I have been too busy to work on anything meaningful??,tell me this isn't a masterpiece
+unironically feel like this would get players,yes i intentionally didn't round the money counter
+nice drawing,darter did it
+oh you like just released this lol,yeah i programmed it 2 days ago
+i dont either 💀,yeah i wanted to try out a new framework concept i had
+I can see this getting like 10k plays from random engagement maybe,i wanted to do that sort of data-driven architecture in roblox
+im forced to make the icons tho because none of the artists i found can make the fugging game icons,and its really nice too
+"kinda, not super versed in how they are setup (I only ever tried modding terraria)",they're like json files that are pretty complex and allow for fairly complex mods/additions without having to code
+minecraft milking mod,like that
+HUH,jk
+Im a scriptir,"im working on another port (not really, i work on it like once a month)"
+I code do pritn(hello world),but i posted the progress on the port in the fabric modloader discord and everyone was hyped
+ill finish up the icons then continue rigging the other models,i aint downbad tho
+I know. I have needed this,studio is having this bug where my mouse doesn't appear when im playtesting
+rejoining fixes the issue,it might be my drivers
+sheesh me and my 1660 ti crying over here,mouse only shows when its over something clickable
+I don't know I haven't had this issue before,the gpu im using is a amd RX 7900 XTX (basically a the same as a 4080)
+😐,yeah i got a founders so it was like
+me and my **1660 ti**,used to have a 1660
+beg on the streets for free money (jk),ye its alr but my screen started to randomly turn black later in its life (drivers wouldn't fix this)
+Plus my mobo supports only 8/9th gen,my cpu is extremely good as well cause i got a good deal on it
+So I already need to replace 3 parts when i wanna upgrade,its a Ryzen 7 5800X3D
+if I ever do 😭,its able to handle kerbal space program with EVE volumetric clouds at 120 fps
+(this is for a button simulator),why not task.spawn/task.wait
+I think?,no?
+I am getting stuff mixed up,yeah spawn is deprecated
+Because then I don't need to call the coroutine lmao,task.wait is great but don't use it in super important stuff
+I mean I also just want this on a separate thread regardless,ive found
+And wow does the code make my eyes bleed,"lua coroutines are pesudo-threads, you gotta use actors and task.desynchronize for actual multithreading"
+"I remember learning about this in one of my classes, especially with how fast cpus are",old code gives me ptsd
+peep at this rq,i used to be super into micro-optimizations so thats why i know all this stuff about roblox lua lol
+completely,NO empty lines
+lol,at least it isn't super nested
+writing code in arabic:,yeah i dont use fancy keywords anymore and most of my code is event-driven
+Nothing was in a module script,took me several weeks to learn how to use a function
+lol,this was like when i was 12
+"I as like ""but like how does the code know that this data is there and where it's line up??!!??""",UnreliableRemoteEvents are truely the best thing roblox has added in the past year
+I know they are good,very good for any client fx
+yeah,you should only use normal remotes when you need something to **absolutely** happen on the client/server
+like what is the difference,theres a good article explaining it
+was it something with how things yield or order,but the tldr
+right,unreliables will send the packet once i think
+so less valuable things won't just yield tf out of your code,so if it get missed the game wont look like its lagging
+but also just mildly ugly now,THIS_FOR_CONST thisForFunctionsAndVariables ThisForClasses
+yep,thats my style guide
+I believe that is the same as the Luau style guide,oh
+according to Roblox,fusion (the ui framework) has a pretty good style guide
+I remember why I wanted to make custom class methods,read this its super good
+I wanted to be able to make things like string.format() for like string numbers (suffix stuff),suffixes are so goofy
+I mean,so i just use the miners haven code
+I also am weird and like writing it myself for the familiarity and skills to do so anyways,miners haven becoming open source was the greatest thing to ever happen in the tycoon-dev community
+That's how I see things,my python code for decoding raw magnetic tape data from Mariner 10 (a 1973 nasa mission) into png image files
+also prevents me from just importing a module if I work for a game and they don't want me doing that,the results of the decode are awesome
+nice,(this is stitched in photoshop)
+I personally don't use python (I don't really wanna do what it's used for as my job),i get that
+"if my employer wants it, sure I will use it. But I also like languages like rust better",these are the raw images (this one is of the planet Mercury)
+Ownership is epic 😎,python is good but its TOO like
+such as duck typing,thats why i use it only for when i need to screw around with files
+and some of the features of python aren't actually what they seem due to how the language handles them,yep
+yep,the whole with (): to open a file
+and it's why it's slow,i find it funny that one of the biggest python ai libraries
+they are really similar,ive not done any nerual network stuff (its not interesting and doing most things algorithmically is faster like 99% of the time)
+(I have never taken calc and my university doesn't require it for cs),i was gonna do calc 12 but ditched it for economics
+lol,physics 11/12 were pretty fun tho
+and it's weird af,oh god
+just dont do --,go into beta features or settings
+useless,that thing programs like its the year 2009
+fr,funny enough i used github copilot for a month
+lol,but i prefer regular intelisense
+me when i use openai chatgpt for tasks im too lazy to think about,i only use chatgpt for goofy things
+people when they design theirbown character ai with their own fetishes,my oc is super lackluster
+"people when they steal other peoples work, feed it into a ai model, then use a prewritten text response to produced procedural generated artwork.. #profit","spaceflight imagery is my most obscure hobby, love anything to do with images taken in space"
+"""dont use my art for ai training""",i have a massive collection of obscure space images
+neat,"or these ""selfie"" photos taken by the XMM-Newton xray telescope"
+"@Known oh yeah for the wave structure what i want is that is should relatively be preset, but can and will change depending on the players actions -- too much unused income, forced the player to spend some such as spamming speedys or sending in a boss too many units, start sending more dangerous enemies su h as those that explode, killing your placed units",mk
+is fully dynamic waves possible or something?,yeah
+man what are yall timezones again 💀,PST
+your up super early,uh
+oof,i should porbably go to sleep
+if its not copyrighted,i bet it has content id somehow
+i should buy this,place: japan
+or busy with schoolwork?,busy with other things atm
+in a. area,use this if theres no map screenshot since its technically my IP
+nice map,ive always been pretty decent at retro terrain for some reason
+welcome to starbucks,this seems like a very asian thing
+"tutorial will be skipped if the following player has played one of these games: skibidi toilet tds tbz tdx allstar rat td towerheroes ult tower def world defenders arena:td, woman:td, bootleg td, action td, defenders depot, ug",so just check for badges
+yes,"one big fear i have for some reason is that one of the games im working on is gonna have to be apart of this ""new era"" of roblox events"
+where df are the devs,devhunt 2020 and 19 at least had some good bangers
+🫠,theres only a few games this year
+“tds” and skibidi toilet”,that fucking highschool game basically wrote a whole fucking robeats like game just for one song
+they camping the 7-11,:knownsip:
+a,that sounds like a demand bro
+ez place,def
+took me 23 hours to do,me and darter both have 100 and 98
+💀,this is outdated
+(with vip),vipless
+arm wrestle pet sim and adopt me i think,i am scanning through the code rn
+"@Known hi sorry for the double ping, just wanted to know what you done so far, if your still busy with irl stuff just let me know, i just need a estimate",currently occupied with contract work atm
+ok,its under NDA so i cant go into details
+"yeah thats fine, all i need to know is when your available",but its only for like 2 weeks
+"@Known hi just doing a check up, still working on that other game?",yes
+every detail except the text,if you use figma theres a plugin that does the image importing automatically
+figma to roblox?,yus
+LOL,you have to rasterize it
+I started summer break today,so a lot happened over the week
+oh,darter already knows
+ooh how much?,well its for the game Dusty trip
+GOOD SHIT DUDE,yes** that one**
+oh,def
+daamn,I don't know the exact number cause its devex based but like
+I am just looking for my breakout,30-35 usd an hour
+I am happy for you man,I don't know i just got lucky lol
+so are you programming or modeling,programming
+I will be working a job this summer but I can contribute during the evening,"im super sorry i really just couldn't drop a opportunity like this, thing is i might be able to come in and patch stuff once inawhile"
+**72k** concurrents rn by the way,min wage here is $17.40 CAD an hour (or is planned to be) and 35 USD is about 45 CAD
+SO,im gen pretty bored of lua in general
+That is why I didn't have time to do anything 😭,nope not in college or anything
+hes bad at money management,same age as me
+especially destroying and adding blocks,its this one so idek if it would be of any use lol
+very fascinating,parts but works with meshes
+stealing code,borrowing code*
+LOL,PoF but minecraft
+cock n ball torture,why
+get help,get help
+like my god,ive seen that'
+failed to load,works fine
+people on the internet waiting for sonichu fanart to recieve a comeback,damn this is an old gif
+hump,wrong gc but doesn't matter
+MOMEY,reddit gold
+# Congratulations you are a certified reddit moderator!!,## oh yeah forgot they added more markdown andy
+up to 3 fards,banned from more
+# F **F**,oh they added
+i did this wrong,100. First list item - First nested list item
+>> Joe mama obama lemon,better group name idea
+mm,yo anti Semite park or something
+Later,please tell me you used worldroot:raycast
+fuck.,ray.new is partially deprecated
+uag,dw workspace:raycast/worldroot isn't too different
+Do i like my commentation by the way,worldroot and workspace are the same
+then why the diff name,idfk
+just say it,this can be reduced to math.round(VECTOR)
+i didnt bother optimizing it yet,tldr roblox has a built in rounding function
+ik remote functions return a value,remote events are when you just want to send something to the server/client without needing to return anything (i.e. play this tween that moves a block) remote functions are for when you want to send data back to whatever called the remote function (i.e. run a function on the server that returns true if the player has sufficent cash so that the client can update the gui)
+can fire server and client alike,for a remote event it would require 2 calls
+you can return a value if something fails to execute or something,yes if you are intending to return something back to the client or server
+so it uses server functions as a client,comparing rounding methods
+loll,not apologizing since serverside
+I don't know,no
+hm,bc an exploiter would have full control over the position of blocks if it were clientside
+i thought it would be better to have the client calculate everything and then the server checks if its a plausable coordinate,all the client needs to do is send the raycast position
+"they only get to tell when they do something, not if they can","think of the client as a drunk partygoer, the server is a club bouncer"
+However,@darter
+HEY,my version
+And couldnt think of one,math.round is barely documented
+HOMOPHOBIC BLAVL BALLS,i made roundvector a global function
+LOL,lol
+ok,if we used knit framework then we wouldn't have to worry about the requires (or remote events/functions) as much but that has a learning curve
+viexy,basically the best framework for roblox scripting currently
+Whore,id say to work on a small game with it before actually using it on this game
+Still outside,ik
+But it sounds interesting,its super basic
+the best way to make a game is to pay a bunch of monkeys with sticks to do it,ignore the red dot i was using it for alignment checking
+Oo,im testing out an idea i had
+needed a few tweaks,it placed like this
+1 stud,ill show
+Ez,no
+prob based on the object its placed on?,didn't work due to weird bug i couldn't fix
+What was your idea,basically make it align to any grid plane
+i feel very smart (not),i mean i have spent too much time in roblox studio
+checks out,ghost preview block 🤷‍♂️
+the clicker,fixed destroy + destroy ghost effect
+wait i still dont get why people set object parent to lighting,it unloads any object
+doesnt serverstorage / replicated storage also do that,kinda but its not idiomatic
+:wawa_dance:,"had a neat idea, for game error logs (for error reporting and stuff) we make generate a log file with all the info we need so we dont need to ask children to write down everything and instead all they need to do is copy and paste text and for testers (maybe normal players) if we are gonna have any, we could make it generate a log file in XML/YAML/TOML for easier management and whatnot"
+LOL,i will do pets if it isn't obvious
+wildfires?,yes
+alr,gonna do a bit of a rewrite of my ProfileDataService module for Knit cause its just so good to use
+How would you do it without a external server script,thats not idiomatic
+WTF,even if the datastore system is down it will still work
+Sheesh,rest is here
+Thats actually excellent to store player data in blocks,this is super technical in roblox terms but im thinking about storing block data as a lossless binary at the cost of readability
+LOL,lossy binary is basically like
+It should be incredibly easy to work with lossless binary,"as long as we are not planning on having more than 32,767 different blocks (block types not placed blocks lol) in the game we should be fine"
+It can hold 32768,with a 510x510 stud arena area
+Unless its -1 for negatives,we can store xyz in 3 bytes
+shouldve shared the ube cookies,when im back from school i will potentally write at least 1 line of code
+when is roblox code snippet feature coming out,its already out
+a,it has been for awhile i think
+still in the works,the best group names are the ones that are memorable
+ty,"call the group ""driver man"""
+cum stain studios,makes no sense but its goofy
+whack a idiot studios,geezer (weezer parody)
+goober central,Geezer is kinda catchy
+:thecat:,maybe
+my eyes,attempt one failed but at least i got something a bit parseable
+so I can start on it,"mostly bc darter is ""a bit"" far away from his pc atm"
+20 by 20?,10x10 blocks is 20x20 studs
+Good thing you have my model,good morning darter
+DID you SLEEP,no i was dumb and took adderal at 5 pm
+KNOWN,nah jk
+good morning LOL,adderal doesn't work like a energy drink
+Literal night critter,more performant and productive at night then during the day
+Wthell you doin,i was installing android apps on windows
+WHY LOL,set up a threads account
+boutta play mobile minecraft on windows,i sent it in the other gc
+Ew,"i saw that tweet and my favourite was ""bros programming in 迎++"""
+like health?,for our game
+they wont hop off yo sheet,its 1:52??
+eyes,apparently what i said was so bad vc just doesn't exist for me anymore??
+lolwut,yeah i just checked this means i was perma banned?
+Rate pls @darter @SukienNetic,i wrote a killer appeal
+check mark is not good,lol
+checkmarker,kinda kinda not
+needs to be brighter,well it worked
+i dunno if the yactually reviewed it or if the ai moderation handled it,I don't know but either way it was a big fuckup on their end
+you were doomed to get banned for speakin,thats true but roblox appeals was on my side
+just apply what you did to ug,what needs to be worked on atm
+he was working on redoing the tower modules but he never got around to finishing it,so stuff like enemies and whatnot is finished already
+kindof ish,mk how soon do you need me
+prob when i come back so like 2-2.5 weeks from now,alr yeah i can help
+LMAO,the backend of good tycoon doesn't look like the game
+"i think the basic placing, tower selection, mainly the client sided stuff is done, prob needs to be cleaned up a bit tho",so no while true do
+@Known mind if i add you to dev gc?,ok
+"Just incase @Known , if your feeling up to it just let us know and we'll add you to a tc",👍
+it's in a document rn,if planet based maps sticks i can def help alot of with design cause its basically what i do nowadays
+lemme get you a video reference,its like eclipsis'
+nvm no video but,🤷‍♂️
+"Basically it'll be similar to this, players will walk onto a ship that's docked and the door to the ship will close and fly off when it's ready",what i meant by this is I like processing raw nasa data for some reason
+Kys (keep yourself safe),i got wayy to many variations of this same gif
+like this but with player in view right,well you can do a lot with my floatcurve spline thing
+mutual servers check,🤷‍♂️
+in a way,and i just said fuck it
+if that'd make it any easier,another example
+kerbal space program,yes
+albeit that one issue,oh yeah it would be a whole lot less ugly
+do you remember it lol,yeah
+never could fix it,its because i used a fucked up curve system
+I mean,floatcurvbes
+in the floatcubes era,i haven't programming as much as i used to just because there aint anything new to learn in the roblox api which is a very specific issue to have
+might feel weird of the enemies aren't like that tho,oh yeah i got back into building without meshes recently as well
+with hypothetical alien species,i cant
+Im joking,outfit loader when you type my username
+Dont do mine ty,i use this one 80% of the time cause i dont like changing my avatar
+I have like 4 outfits,the last one is directly darters fault
+NOT MY FAULT,i can pull off a pretty good low voice and that avatar is the complete opposite of it
+WHATD I DO,off topic but wdyt of my iceberg chart that im working on
+me :3,everything has a description and a link
+I know like none of these,STS-107 AMOS Images is by far the most jaw dropping of all of em
+like lord sinister from tds,yeah sure maybe
+guess what games finally coming out soon known,?
+remember that voice hangout game with haikei,yeah
+I spiced the map up a little bit and he had 2 programmers working on it for a bit,i dont really want to associate with haikei but i wont get into details
+yeah,one of the best entries on the berg
+pls robux darter,i stil have remaining robux from when i was on the 3% payout
+dartier,i dont spend
+Ok,"i do recommend you try to market the game as completely ""brand new"""
+lobby,i do also still have old ug files from the lane placement days
+Alright but no fuckin up this time,"i def think there should be a ""classic mode"" with lane placement as thats what many liked about ug"
+We actually need to reinvest,i mean the only large amount i did was 1k
+Im talking about biscuit,we should invest the robux into hawaii electric
+lmao,the lower the better!
+I haven't been donating recently anyways,the context is that they likely are the leading cause for the hawaii fires
+Def,so they are being sued to hell rn
+get what you give ig 🤷‍♂️,our province is in a state of emergency rn
+shaking my head,the last time this happened was during the 2021 floods
+i dont remember the name,yeah ik that one too
+Gn,gn
+wish me luck,knownsh great roadtrip too
+Come to cali,i didn't mention that to you lol
+hurrican,i drove straight threw jasper national park earlier this month
+going to canada in a couple years so if i happen to be rich as fuck by then then maybe ill visit you guys lol,mount robson
+Come to cali,2nd tallest mountain in BC
+I'm sticking in iowa man keep me away from cali,the bottom thing is just from the image viewer i use
+Fellow canadian?,ye
+Bc?,Yeah
+Van?,nope
+Kel?,no
+Prince Rupert? (doubt),nope
+Hot or cold,lukewarm
+Windsor,nope
+f,it took forever for my friends to figure it out too
+Terrace?,its big but you dont really think about it
+uhh,heres a hint
+up 93?,no
+Its north of hwy 1,yes
+South of 16?,def yes
+100 mile?,its somewhere in this screenshot
+I KNOW WHERE KNOWN LIVES,@darter dont spoil it
+is that it?,maybe!11
+are you on the island?,yes
+ITS COMOX,correct
+Courtenay lol,no dont live in courtenay
+mid,there aint much
+guessing game commence,the proof (there really isn't much in this photo tbf)
+Better than calgary tho,lol
+sylvin,ver yclose
+Alberta mid,i didnt actually visit it
+OSINT?,i went there
+Lmao,its way too
+edmonton,+ the only thing that interested me i could get on amazon
+mid,hinton was fun tho
+its the most mid city,i didn'
+good,the trip is already over
+im tired,this is about the route
+imma slep,gn
+kinda,bottom andy
+its mid,@darter also lives in cal
+LA?,cal as in calgary
+Calgary,dardar
+ACCEPT MY FR KNOWN >:(,they air
+I dont have money rn so ull have to wait a bit prolly,i have to be 19 here to get a god damn debit card with an actual number on it
+It's 16 wtf,yeah i kept trying to get the online number
+It's 16 wtaf,but it kept kicking me out saying i needed to be 19
+I don't know what bank does that that sounds braindead,"and also the fact i couldn't even check my account for a month due to an ""unknown error occuring"""
+Scotia better,bro i know more about money than most people in their 20s
+same goes for you both @darter and @GUOM I can paypal or just send you robux when the updates finished,you might have to do robux payout 😭
+alr,its completely legal for me to drive a fucking quad that goes 100 km/hr without a license
+Debit is better than credit,i meant debit
+18,18 in alberta
+lmao,19 here
+you know those guardrails on freeways,i do have one of those
+jeez dude,its 19 in basically every province besides alberta
+yeah thats scary bro,all i saw on my trip was a car ingulfed in flames
+:( rip,cause it rear ended a semi
+train too powerful,you know what wins against a train ?
+Russian trains are fucking tanks,this whole tornado footage archive is nuts
+Old vector fission development footage,everyone survived in this building
+known might pitch in a bit too tho,yeah biscuit is expecting one every single DAY
+you gotta get the creative juices flowing darter!!,you better not go over it
+2.4 seconds,whats funny is i made iceville 3 and dead ahead on the same day
+the ice planet,sure
+"Deci, PvD is bad tho, it promotes restrictions","you want it to be like Enceladus, Triton or Europa?"
+But they aren't restricting a tower from doing damage,how about
+Uncollidable enemies are pvd,"Enceladus water plumes, europa landscape"
+immunity is stupid,ill say that im pretty rusty with blender
+WITH SPOOPY,moeny tycoon
+@Known wdyt of the ui rework,it looks good
+w,i saw
+MORNING,I’m going on a hike
+KNOWN?,Yeah
+LOL,Ik
+LOL,I don’t fuck around
+Added GUOM to the group.,inabit im eating food
+no wories,if you have shareX just send the gif files
+known did you see what i wore LOL,yes
+LOL,its what use to screenshot/record
+it would be better if we had 2 songs,👍
+or is it something roblox made,a module
+the 2021 td tier list,gas station tweakers!!
+Anyone wanna hop on my game 🥺,dont got roblox open atm
+was fun,im on rawblocks now
+(it will hurt you mentally),oh dw
+@Known yo I heard the gift collection simulator live event was beginning soon!!@@,yeah -13445 quadrillion seconds
+But it died,KnownShhs and CRAZYLICKSPUP
+yes,yeah ofc
+Every other game is inferior,this is the most fucking bland description ive ever seen on google maps
+Guh,the game would pop off if you added skibidi toilet
+@Known did you hear asoliuxs new lobby song by the way,a lil
+just faster and more intense,nice and chill
+leitmotifs,HOME (the producer) vibes
+Sheesh,aka summoning salt music
+Me when the resonance hits,this ones harder than resonance
+listening to my lofis rn,bro the music i listen to on a daily is FUCKED
+"Known, you cannot compare to what i listen to","hyperpop, speedcore, edm house, anything with a bpm over 170"
+Which is why its my favorite,i listen to a shitload of dashie but thats just me
+"Goreshit, Breakcore, Japanoise, Hardcore, Artcore",one of my recent favourites
+you,i have pirated spotify and it works for me
+Google play music was fucking goated,"it has litterally fucking everything from like good minecraft server hosts, file opening software, to fucking like how to pirate some obscure software from 2003"
+Does it have cheese,probably
+I approve,oh my fucking god
+Deci had a cheegasm,a whole fucking archive of cheesers
+cheese,from around the world
+The uh mech thing right,i forgo
+Wasn’t jf really pvp oriented,the only thing i think its lacking is its minecraft mods section
+Sakura juking boutta be wild,these are old asf screenshots but are kinda funny
+kys,yeah the newer updates kinda suck
+Wheres the video where we raced,iforgt
+sure,im still awake
+I'm not gonna work rn tho,i mean i stayed up for almost 37 hours yesterday before sleeping
+ez grind,nah 37 hour hyperfocus would be real bad
+Started a call that lasted 64 minutes.,im gonna be heading to sleep soon
+@disquit uh where are the buildings,wdyt
+@Known yo,?
+can you get on to call about the tp system soonb,yeah after i eat
+lel,give me 3 minuties
+Pinned a message.,mcguardians
+@disquit sex,lets fuckjing joee
+I was thinking dnb but ok,unknownshceptable
+@Deci3ve0us sex,amen break in the fucking end game music LOL
+Infect us >> ug,@darter
+@Sweaking sex,its cloudly out @darter
+gn,roadmap
+LOL,Task 1: script the entire game
+so good,task 2: script some stuff
+with my girlfriend rn,hopely by noon
+That was an accident,accident
+A rubber room with rats,and rats make me crazy 😭😭🗿🗿👈🤢🖐️👈
+France,new ui idea
+Did you take your normal pills,??
+LOL,i posted like 2 things in the other gc and thats it
+New verified badge qualification are here,get people to followbot me
+Yes,funny enough thats possible
+Increased my follow count,bro!!11
+I need more,thinking about programing a cframecurve
+for what,camera
+if you want to you can,nah i have an idea
+Lets go,looking at old files and found some of my old offbrand lt2 builds lol
+All me,yes you did
+and then theres me on the other side trying to make a auto smelter on the side,ill just rewrite this for the camera system
+DISQUIT WHERES MY TAG!!11!!1!!1!!,LOL
+LMAO,backrooms
+LOL,sending random videos
+I still dont know why you remembered every single african country,i was bored
+And then proceeded to SPEEDRUN NAME EM,my pb was like 59 seconds then i just fell off
+ok my ui work is shitty af rn i need a ui break,ill do it LOL
+i was like,no
+i deleted half of it rn,let me see if you have a hidden talent
+i saw you fly around,nothing yet
+abcdefghijklmnop,i get a spurt and spit out 100 lines of code then stop on the most basic part
+nice,and whatever this is
+Bro what,basically made a brainfuck interpreter in roblox lua
+Why would you want to use brainfuck,you dont
+i like the way it looks,🤷‍♂️
+Ill make sure to put my fingers all over the code,will you fondle code?
+Yes,dangg
+i dont think i can work rn,you dont need to
+its just my pc that really hurts,yeah dont work while your sick
+But yeah we can do it in40 mins,loading screen loads image assets now
+nice,i did this before anything else because its actually super useful
+yea,this fixes that
+you can do it if you wanna end up taking that other task I set on the trello,yeah i can do a lot of things
+ok,istg textchatservice is such an upgrade from the old chat system
+@Known wanna vc,give me like 10 mins
+Started a call that lasted 128 minutes.,1 moment
+Give me 69 mins,stay in call tho
+ok,2:40
+@Sweaking by the way you got footage from yesterday right,i love whore games!
+alr,your lying!
+ty :3,game leak
+is it transparent somehow,nope
+"@Known just keep working by the way, my heads hurting too much rn to stay on my pc so I'll get on at like 7 if your still working",alr
+Started a call that lasted 0 minutes.,not rn eating
+I got a long nap,give me a monet
+ya,the code aint bad for it
+I was assuming you were gonna change the roblox prompr,that is a proxmityprompt
+@Known you good now?,ye
+you good le_guom,yeah this was my fastest ever solo time LOL
+atypical texan,i only have like one photo of me from recently lo
+kid named KnownShush,i will never show my full face online
+CG5,never got that comparison tho
+I SEE A DREAMER OVER THERE BY THE WATAR,fine have this super blurrly photo from 2 years ago when i wasn't in my best shape lol
+yea cg5,wojak
+sick 360,hello.. jesus thatch
+ok,sorry i was preoccupied irl for a few hours
+ill give you discord nitro if you work rn,wait for adderall to kick in
+:hehehe:,STFU darter!!
+@Known @Known @Known @Known @Known,give me
+:large_stare:,fr tho this but just instrumental
+dang hope you feel better knkwn,Yeah I was on a good workflow and stuff then it hit
+the stomach thing?,ye
+prilosec,dont got that
+zamn,its likely just some weird af constipation or some shit
+dang you still working onown?,ye
+I got some HW I been neglecting lol,densified the code (by the way i did use other bits of code and shit cause there would be no way i could do this by myself)
+but there is in studio,might be because it isn't published
+how are the mountains by the way known,they look good
+does it have to be public or smth,i forget
+summer months are accurately represented by that model,WTF I JUST MADE THE CAMERA PAN SO MUCH BETTER WTH??
+like 25min,LOOK AT THIS SHIT
+@disquit trying so hard to hold back not sending the 50 pictures i took of the mountains bro its just so good,the only con with this planet system is the data is a bit clampicated
+see it for yourself first,when we get on call we need to discuss how the map selection ui is gonna work cause i have a few ideas but i need to run them through yall first
+cant join rn,ignore the circle in the 3rd pic it was a screenshot mistake LOL
+?,k
+ik I do,ye
+NEVER BACK DOWN NEVER WHAT?,yeah i will work in a bit
+@Known hey any progress,just started
+will the map name tween upwards,ye
+the map image,k
+just replace a difficult selection for the modifier select rn,k its gonna be like this in the future
+damn you still working?,not rn
+your sexy darrter,its so fucking good holy FUCK!!
+Sexy knownsh,haven't sent it yet
+Oh,Just admire
+ok!,damn wtf
+hes spoiled af,where did bros money come from
+his parents,oh that makes sense
+gay,i will say that i grew up in a pretty stable household yet im still picky with money somehow
+HAH,bought a house here before the inflation occured
+bisexual,no
+gwah,so many property settings
+ye,god i love this new Luau feature so much
+then changes his gender again,icy has probably only mentioned my name once
+and gaslights you about it,and has never dmed me
+tower heroes,@disquit gonna cook soon anyway
+i dont play tower heeroe,yeah maybe
+do you think we should model the planets?,heres the current matchmaking code
+500 lines,400
+wanna vc now lol,ok
+imma get a drink first tho,currently working on sexy sex porn hot big boob script to increase retention
+@disquit you still on?,i figured out how newproxy() works finally
+ye,newproxy() creates a userdata
+@Deci3ve0us wanna vc,ye
+balancing,would it be good for me to program a ingame dps tracker
+ok,i think im settled with this
+not kellan,added the thingamabob
+@Known progress check,eating
+ok,?
+in the honey hive group there was a new rank added but we cannot access the new lobby through that rank,i remember writing an formula for tower price balancing like a super long time ago so i might post that after i enable access for you guys
+oo nice,gonna give you guys a custom title ingame so pick 2 colours
+YAY!,yeah 2 that go together would be best
+dyn you pick 1 i pick 1,one for fill and one for outline
+lol,@disquit do you trust them not to steal game or go into studio
+nah they don't have edit perms to anything,yeah in principle
+I was just using the uh canvas wheel that someone posted here,damn roblox makes it amazingly hard to allow you guys to join the game
+yea we can wait,k
+sounds good to me,k which ones fill which ones outline
+they're fine,yeah all the settings in the group are greyed out
+awesome,k
+awesome ty,any changes or anythin
+i think it looks fine,okay
+Bro what,yeah its clampicated
+m,thus why its Theoretical
+@Known PROGEESS,i was taking a break
+FUCK BOXER!!,just lost an entire function cause of roblox commit bug UGHH
+I don't know if you also noticed but I increased the amount of cash you get overall by a bit,did anyone go into the matchmaking module
+"I haven't touched anything relating to that, haven't been on studio in over an hour",there was a server/draft conflict (caused by someone else editing)
+ok i changed a few things and imma run these boxer changes,this ugly ass color combo shows up at your front door
+Knownsh is my advisor,@disquit whats the base map reward or does it change depending on map
+noise,past 550 lines now
+hot,i love how you can get rid of type errors like this
+Started a call that lasted 6 minutes.,ok
+@Known setting player positions and tp screen next ?,yeah gonna do backend first tho
+Started a call that lasted 10 minutes.,"heres the full script, (still not finished believe it or not)"
+I forgive your old man body,new drivers (im not gonna update my drivers until my screen starts flashing again)
+hm okay ty for the notice,i might do a livestream
+@Known,i need to setup obs again so it will take some thyme
+quah,my condolences to anyone else who has to edit the matchmaking serverscript
+ok,im actually kinda proud of how the serverside matchmaking script looks
+me and deci prolly won't be talking much so,not rn i focus better off call
+alr,roblox secretly pushed this feature out of beta now WHAT
+that wasnt always a thing?,no it was in beta for the longest time
+oh,aka you couldn't use it in published games
+ah,by the way the reason im so obsessive with typechecking now is because there are plans to make it so scripts that have type annotations are more performant
+o i see,also this
+"so the ""type Match = {}"" creates a type you can use for typechecking",yeah
+oh shit i had no idea,if you infer the Match type it basically helps connect a puzzle in the intellisense
+you gotta teach me some of these things later lol,it took me awhile
+ill prolly start using that later,especially the
+cause im not donig much programming rn,yeah after i found out that it basically fixes intellisense i just started using it EVERYWHERE
+whoosp lol,one of the silliest things when i was learning type annotation was the & feature
+i thik so,trying to make it very readable cause i expect others to have to modify it in the future
+lol,i dont see whats wrong lol
+i meant to circle this part not the table,"the ""leader"" not being ""owner""?"
+no the game errors out cause its an instance for the attribute,OH yeah
+yea,weird ass bug that i think is caused by the networking module
+lol,i had to ditch the networking module cause it had several bugs that made it impossible to use
+so try to prioritize it,fixed the planet jitter
+zz,yeah probably
+we got da ship done known,jut got mc donal
+mm jpeg fries webp burger,yeah
+fire nam,ok i made it so if the owner disbands a match the other players also get kicked out as well
+pulse rifler party,lol yeah
+Ooo,im dreading doing the screen scaling for the uistrokes once im done with this
+glhf,tell me if this is a roblox moment
+ooh okay ty,honestly the colour sequence editor plugin is worth the robux
+The chemical properties are determined by the valence electrons,i am still writing the server backend
+Checks,damn you really forcing me to make it fort knox
+😰,🤨
+:blahaj:,surpassed 1100 lines of code for matchmaking
+quite shrimple,making shit exploit proof/non laggy is hard man
+Looks good tho,white
+yebetter,i also made the outline darker for readability
+prolly just sap hp no healing,how long should the match countdown be
+15s,i.e. how long can players join for
+thats what it is rn,15s seems a bit fast
+20,k
+i closed studio rn lo,@disquit can you team test with me
+ye,i want to test matchmaking
+jouining,@disquit why you leave
+@Known,?
+lol,😬
+can you test wit me in the actual game,k
+@Known I'm ingame,by the way im gonna add a simple debug ui for the qa testers that shows the server errors
+tell me when to rejoin,found the reason why it didn't work (probably
+it's knownshing time,okay no more delusions
+Smart,hold on im gonna add something else to test
+no worries,alr im ready to test
+Oh,matchmaking
+LOL,okay this bug was a feat
+is it tryin to create the match if its already in use,no
+wow known,ok finally i believe it will work
+fireclients,im gonna make a tree diagram
+@Known you almost ready to test it again,doing a whole lot of fixes
+Future updates,trying to fix a extremely confusing bug
+can we start with sweaking 🥰🥰,I finally figured out and fixed the bug
+ok,made it so when your selecting a match it disables your reset button
+nice,you also cannot create a match if you died
+Wanna know what's funny,?
+known can we test anything by the way,not yet
+alr,just wanted to say this is the sharpest moon photo ive ever fucking seen
+@Known any new progress?,not rn
+"`` NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(1,25)}) ``",yes very informative
+i think its cleaner now,ic
+@Known anything to look at before i head off,not really
+alright,and i code bad when im sleepy
+@Known your awake??,kinda
+so uh,half asleep but still awake cause i got distracted by interesting things
+it took me 4,Its blatant
+refuse answering is the best course of action,i was outside naked and there was a man walking in the street.
+its with the profileservice thing,whats funny is that because most roblox games that are gonna abuse this feature have little replayablity it just makes gamepasses cheaper
+and save it,they really trying to get people to use those new avatars unironically
+i can in a bit here,by the way biscuit why not just do like discriptor1\ndiscriptor2
+theres 5 lol,ic
+it works fine,oh yeah i can also write a tower stats type so the stats file throws an warning if someone does a typo
+we can add that later,it would take me like 2 mins
+@Known tmr we'll announce the update,k
+we can show off the tp system in the stream or something,"what is this ""crap"" discord server we are pinging"
+Ew,my reaction
+"destructor - walking robot thing, when it dies it stands up and launches into the air, falling back down crashing into its killer ( dealing lots of damage to the main tower and slight aoe damage )",NO FUKCING WASY
+I’m just chompin on my pizza rn so I’ll get on in a bit aswell,ill likely pop in if i feel like it
+I need to figure out how to save a table to the profile service crap,i can just give my new profileservice wrapper
+or only strings,no mine is lightweight and is able to direcly edit tables
+also,hell yeah
+we should switch the data,its better than anything else ive used
+I just dunno how to switch over the data without going if name == pulse rifler and not data[idhere] then add towrr,create a lookup table for old data
+you wanna do thhat this update?,sure
+ill try to get it so we can switch all the skins over as well,pin always says hes a bad builder but i peeped at a teamcreate and look at this shit
+"interiors good for lowpoly, just the extrior needs work, not bad tho",no it was a never finished build
+vc,give me a bit (~10 mins then ill join the call)
+@Known hows that butt and boob jiggle physics going,going well
+Lovely im expecting for it to be done by tmr ~~so i may implement it into my porn game~~ for science reasons,i didn't want to say what i was working on in ug (keeping it a secret so i just spat this out)
+does this take into account recoil like on galactic soldier,ywe
+yea we are actually buffing bounty hunter and frosty if you know what i mean,repost
+Yall are sharing a singular braincell,what do you want me to say
+Who wants to hear me piss,what if i join the call and my voice is completely different
+Because im not pissing,1 of ya would probs not even notice
+HOWD you FIND IT,methamphetamine
+Meet you in fresno,TweenedObject.new(object)
+@Known anything new to test,not rn
+I forgot to leave vc when I went out for lunch,feeling sleepy so im gonna go to sleep real soon so that i can wake up early and push out the animation by the afternoon
+@Known Good Morning,@Dynatoast you are pins kryptonite LOL
+theyre me living a little bit more east,HUH
+LMAO,I’m confused by that weird ass thing in the forground
+wdym by this 😭,Like despite knowing him for like 2 hour
+?,"""cinnamon is just sawdust"""
+"cool, unfortunately, prison",tower health % 5
+Also hello pinis,math.floor(34 / 5)
+maybe cause im working on the new health system,try holding/grabbing something with your lips for like 30 seconds if its still stuffy
+40 benydryl will probably fix it,health per bar = total tower health / towerbarcount
+did y’all just ragequir the vc or no,yes
+LOL,i amlistenting to music
+I was gonna join,we elicited a huff and a puff (caused by a weird hobby of ours called breathing)
+i dont think so??,i forgot i still had this favourited LOL
+which gif are you talking about in this situation 😭,the first one
+you are the cat whisperer,god i want the ufo kaaba
+F,🤨
+i’m on cellular,mailder hates southern Philippines
+LOL,NOO
+splatoon problem solved,noo
+i will ABOLISH honeyhive,i have too many emojis of
+ew look it’s chicago off in the distance 🤢🤢,:elonlaugh::jeffbezosangry:
+got that 1 bar 5g swag,levels and curves
+the few spots you can spot chicago from the other side of lake michigan is so cool,wdyt of this moon photo taken by a earth obs satellite
+hot,also a big discovery
+(my silly and goofy balancing actions are what they are testing),THIS ONE IS SO COOL
+@Known anything new to test,you can try matchmaking ig
+officially 1 hour and 20 minutes without power….,fyi once a match departs players cannot leave
+i hear like,blud burning whale blubber 😭😭
+LOL YEAH,duh
+it doesn’t look right on me anymore because i have long hair,yes i remember the photoghrams
+spent at least a whopping 5 minutes complaining how fucked up the rocket in alterna is,Oh god the soyuz-ariane launch system
+carve into the crater and go up,~~lest~~ we forget
+would’ve been so much easier 😭😭,heres a smarter idea
+the even bigger question,also they designed a rocket
+??,which looks like its intended to go fucking
+isn’t splatoon canon within itself by the way,attempted to fix the geometry on the sole fucking delta 0100 image
+sea.. cows?!?,i feel like people today see people in the future the same way we see people in past
+my guess is they saw cheese in old human stuff and went “bro we should copy this” and they artificially replicated cheese,we always see cavemen as stupid yet like they all had the same brains as us
+judd showing them cheese to recreate it for his fat ass,bro all it takes is some smart mfs to figure out something
+like your telling me you couldn’t think of a better interstellar mission plan than just,big issue spotted
+yeeting a space shuttle into interstellar space,"was there the ""twang"" when it lifted off"
+can you imagine the combustion instability on these engines,bells are actual cones
+did you guys know astronauts dont actually pilot the spaceship!!,wrong
+wrong,project mercury
+NUHUH,ye
+also wasn’t the lem descent mostly manual control too,this is from mercury
+why is the engine section like prestine,answer: engines are strong asf
+@Sweaking you wanna play lol,:3
+😭,bro
+2 extra robux,my ip is 70.67.154.148 tell me if i live in the middle of nowhere
+Thx lol,ive never seen a cockroach before /srs
+The room smelled like orange and death that day,yeah wouldn't reconmend
+That i can eat,does raid use DEET
+Sorry lol I never owned pets I don't know if I should feel sad or proud,i met a cat and almost went anaphylactic on my ab roadtrip
+he would actually die if he met me my clothes are always covered in cat hair no matter what i do,dogs are fine tho as long as they dont lick too much
+my stepmom is actually allergic to cats but only cat saliva so she only has issues if she gets kicked,had a 130 lb rottweiler jump up and accidentally scratch me and zero reaction or anything
+o,le bomb.. it le kill the le people
+RIPP,WHAT
+who is blud 😭,i honestly haven't been to motivated to program much today for some reason 🤷‍♂️
+dd,dw it aint burnout
+@Known anything I can test b4 I sleep,no cause im gonna go to sleep soon
+This is an amen break,i hate how this fucking sequence is ingrained in my fucking head
+get out of my head get out of my head get out of my head get ou,oh yeah i hear it
+I'm tryna find something disquit sent in video links,some it sounds like the first 5 notes to megalovania
+LOOLL SORRY ILL STOP,this damn photo still drives me nuts
+ok cool now vc,why was bro taking a photo of sleeping andy like that'
+bro wasted a perfectly good shot on that,god bless ❤️
+OHH THAT,OH cant forget these 2 photos
+i loved the fight,??
+@Known,yegh
+do you want to stream yourself working on the lightspeed effect,yeah possibly
+we can ping ug for it now,can i post these clips to twitter without explaining what they are for now
+im sorry you eat like its 1790,the challenge is
+did what,no this is you
+(Just curious),🤨🕋🤨
+🤨🕋🤨,admittedly good art
+<3,like bird birds or the division of the Canadian air force
+aka theyre too much of pussies to deal with the snow,they do a load of practice around here
+the official darter bird,you hear it all spring
+oh ok,despite being on the island for most of my life ive never ever gone to tofino and i dont really plan on going
+278 notifications about darter being a femboy,🤷‍♂️
+@Known lmk when your on,k
+deci blocks me arc,true!
+yes,"ignore this is just useful for future stuff (like star striker) ``lua local function angleBetweenVectors(a, b) return math.atan2(a:Cross(b).Magnitude, a:Dot(b)) end ``"
+@Deci3ve0us,Pinned a message.
+noway is that spungleblorp,player collisions fixed
+@Dynatoast i lost track of time but if you wanna play again rn we can,okay i want to test matchmaking walking with 3 players
+lemme know when to rejoin,rejoin
+@Known want me to clone one and move it in place,no i got it
+o,foc using
+LL,lol
+so it'll be easy to import everything once we're ready,please keep tpbox in workspace lol
+wdum,its a holder for now
+working onhealthbar,i disabled the matchmaking stuff to test faster in case you were wondering
+Is it time for another KnownSH first time coding twitch stream,not yet
+oo,combined some sound effects.. its meh but it will do for now
+Oh my god squid jesus,i have a feeling this is gonna be fucking nuts
+knownsh when will you join vocal chat,when i feel like it
+So make it MODULAR,its just a pirmary part
+WHATD HE SAY,"print(""10"" + ""20"")"
+2 number,"print(type(""4784""-0))"
+care to explain?,btb
+Hi darter,lets stop now
+get mad at him,we were begging aso to stop
+Added aso to the group.,no ring dartar]
+Potential Obliteration Radiates Near,Pulsar Osolates Radially North
+ok,the solution to the trolley problem is to have the switch halfway
+What happen,reddit awards will be removed
+Still won’t make me return cause of what they did to APIs,ive only gotten one reddit award before LO
+@Known wdyt,good for now
+i am ALMOST home,i went to seep around 2 am and woke up at 9 not feeling sleepy
+lol,🤷‍♂️
+wen hop,kek
+oh,6 months because i turn 19 in march
+LIFE IS ROBLOX,wen hop
+(mainly because itd be neat to see 2 companies following the sameish testing method at once),mailder would be moaning by now
+am i tweaking?,got a crazy alt hist story idea
+thats kinda cool tho they got a port of assassin's creed onto the iphone,"we discover aliens, but the issue is that they live on a superearth, thus making it impossible for them to go into space without absurd hardware"
+how do we help them then,we dont
+chinas space plans when america rolls out the megafreedom 7 unity,obama nuke to launch over china in 2 months
+it looks so dinky,i do think lunar radio telescopes are the sub magnum opus of telescopes
+i need to see it happen so bad,that one sunshade + telescope idea
+ksp ass rocket,i can start today maybe
+we win,i bet they are promoting this as apples idea
+thank god they didnt,not because they're legally required
+how is it not more expnesive?,unless apple has somehow gotten past the hard transistor limit (they haven't) i dont expect it to beat native hardware on a pc
+yeah sure switch textures but still,then again you can argue
+early open world lookin ass environment,"""switch 2 will be releasing with native ai capabilities"" or some shit cause nvidia"
+*whatever Nvidia cooks up to gain leverage,whats yalls hottest takes (out of everything)
+execute me now ik,okay mine is that starship makes little sense for most payloads
+that’s a pretty cold take,dang
+that’s abt it,okay we should legalize nuclear weapons on commercial rockets
+and saying tdx copied,&-?
+I will sit there for 30 minutes and write an essay on the smallest thing for shits and giggles,"In the hit game ""Tower Battles"" on ROBLOX, you are supposed to shove the keyboard and mouse up your poo hole in order to play the game correctly"
+"""k""",you should've seen my corn rant i did for viexy a month ago
+I'll pay you like 30$ for it lol,yeah possibly
+"after you finish the inventory imma make viewable loadouts, yk how tds does that shit",no
+why,i mean like ive not seen it
+o,so I don't know what it is
+just click on player see their loadout,oh
+are my enemies soulless : ( @PinPin,added the ability to skip cinematics by pressing the RETURN (enter) key also added a return value to quicktween after way too long
+have you noticed i had biscuit fix your major qol issue with the map select,no not possible
+DEVASTATING,it will probably be a setting for mobile users
+@Known you can also stream working on the inv / shop,?
+bitch,well the arrow keys dont work
+Started a call that lasted 214 minutes.,im adding arrow keys back
+"""oh map select ok ill press q e""",me
+majority vote knownsh,i added it anyway
+right??,yeah
+alrighty,unfortunately it might be a bit more clampicated than the old one at the cost of safety
+LAID,sorry
+o,oh shit
+@Known figure anything out?,still working on it
+alr,fuck yeah got a password reset on my bank account
+i dont think its possible 😭,70% done
+Me fr,YEAHH
+W,@disquit you can transfer to me via paypal now
+w,profile = coroutine.yield() will completely stop the function from running
+@Known finally alive,oh lol
+I could tell I was like in duper deep sleep lol,damn
+I'll give you some extra $ lol,what table crap
+for the profileservice thing for jandels game cause I have no clue how to add crap to it,oh
+I dont really do anything data related,i can peep at it
+i basically just need a function to add a table i believe but im not sure,currently working on a full typecheck for the promise library (dear god)
+when playing anything it works as normal,give me 2
+oh my god apparently they used the concert vocals?? I didn't even notice that's so COOL It fits really well,THANKS DEVEX!! #DevEx
+works way better now,nice
+lol,even worse is the only way i could check was going all the way upstairs
+oof,wdym
+And it just being an unmanned gun,ignore
+and separate the turret from the actual gun so it can move up and down,gignore
+gg,ignore (dont be afraid if i send a lot of these)
+LOL,ignore
+LOL,ignore
+did you reenable the matchmaking,yeah
+I guess he did end up giving him the codes later but geez,oh ic
+@Known tmr you want me to make the lookup table for the towers id's and crap,k
+roblox updated particles,just sayin 14 days is the longest ive stuck to something in a good while
+yeah it is haha,i doubt ill stop unless i get some crazy brain drain
+by the way known devex takes like 5 days so I'll pay around the 18th,k
+would that be possible,maybe I don't know
+my friend has an Xbox we can use to test,i have all the hardware for both xbox/ps testing in studio
+oh cool,the hardest part would be making everything react to changes in inputs
+ok,Not homo
+dartar sauce after posting another gay furry image,Foreshadowing
+no resolution tho,i got one of them
+@Known vc?,soon
+this is going nowhere,Universal Guardians: Some thing
+[ Tower Defense ] Universal Guardians,Universal Guardians: Epoch
+grez known still awake,ye
+@Known are you still working??,yeah
+oh my god KNOWN,sorry this library is really interesting to work with
+GIVE THEM EVERYTHING,oh fuck yeah state driven data editing
+im like 99% sure this has gotta be marina splitting off due to disagreements and pearl is trying to help you get to her or something silly before she goes WAY too far,the issue for others is the source code looks like a foreign language
+that dark moon remake i think,bc i know the rest works i added the rest of playerdata
+DUDE I WANT TO WATCH IT SO BADLY VUT I CANT IM IN CLASS 😭😭,lolk
+LOL,at 7:45 i will go to sleep
+bro can NOT get off that grind,I stopped at 7:45 like I said
+I can only add suggestions 😭,by the way whenever your ready i can show you the package thing
+i did it last nightg,right click on towerstats
+ye,click publish to package
+did it,done
+hes cool,give me a second
+@Known wanna vcnow,in a bit
+i still cant talk without it feeling like crap a minute later,god you have no clue how hard this was to program (iris has a weird buggy state system that i had to brute force remove to get this to work)
+try to animate the legs,what would happen is iris would not realise the table had been changed
+wish there was a way to download gifs off twitter i need this one,finished for now finally
+oh wow looks neat,with that done i can finally work on the gui without having to implement everything
+wow ok i shouldve known to bug my mom to let me use the thermometer (i didnt know where she had put it) she said i was fine i do actually have a slight fever 😭,its likely polio
+and pray it comes back early,button.ondick() mindset
+and jah sun for exclusively darter lmao,I don't know it only reads out skins from the skins folder
+ah so the skins that existed earlier have probably already been wiped from userdata?,probably
+@Known,?
+Uh oh is that bad..,if i remember correctly
+agent 4 has not been seen after their home location was leaked,arguably exterior walls are still not very pleasant to go through
+like ok i get pearls house because its so over the top but what did 4 do,at least here
+also anyone wanna mention how stupid long hammerhead bridge is,here in bc these are the requirements
+4 had a lackluster story mode but give them a break they don't deserve this!!,example:
+I blame cuttlefish,litterally this
+ideal society,"if i were to guess, splatoon 3 is focused around the yellow sea"
+the entirety of inkopolis vs. one really big killer wail,world maps in 1456:
+HELL YEAH!!,for north america being discovered by non-viking europeans 30 years earlier this map isn't half bad
+"""ohh boohoo the land.. the land guys we must have land disputes theres not enough LAND""",bro was cooking in 1794 holy shit
+wtf yeah,even got the moon for good measures
+thats just a flex at this point,and to think that was probably mostly done with just basic trigonometry
+but yeah do change it obv,oh wha
+it was a rapid response mission so no coverage,and no rud
+mailderwitha bait,gonna wait until john says something
+im not trans before the trans community kills me,parker solar in the delta iv fairing
+hi smaller,true
+thas cool,my estimate was 80-85 degrees
+Big Suck Deep Groaning,not my actual location obv
+@Dynatoast wanna vc,maybe in a bit
+please,im really sleepy
+I think so yea,"imagine a earth like map, with a skybox showing its orbiting a gas planet with 3 suns"
+☹️,im really bad at drawing realistic things but EXTREMELY good at engineering sketches
+demonstrate,i dont have pics
+lowkey adorable im ngl..,except like one house i drew
+did you go to engineering school or is this just your thing,i did take engineering 12
+never say that again,im a tinkerer
+My art sucks ngl,im gonna set up a long exposure of the starlink trail tonight
+ANYONE GOT ANYONE>??,for proof
+LOL,pin knows how rare it is for me to change my pfp
+Wow looks really nice,so it might have come as a shock to change it to what it is now
+@PinPin draw me!,4 times in the last 3 years
+😭,the 18 or older Club penguin
+i have a whole like stockpile of squirrel art,then the viexy one
+:(,im good at photoshop tho
+lol lmao vieexixviexy art,proof
+:cloverwag:,its a fucking jumpscare
+These all look awesome,243 ida jumpscare
+tmr night,taking a break tn
+DARTER,"i find it funny that you cant do a sip with my ""old"" avatar"
+LOL THE HOPIUM,darter furry smut collection pp-proof!
+found my new favorite image,honestly tho jokes about 9/11 kinda got to me after i saw the Guy Rosbrook footage
+and every now and then you just get something like tentacular circus where its just completely incomprehensible,i asked chatgpt
+ong ong ong,you should see green onions
+LMAO,lol
+No :3,that image cured my depression
+MINE,hot take: salmon is no better than chicken in terms of taste
+honestly true,its chicken you can eat raw if its from one side of the ocean but not if its from the other side
+which side can you eat it raw from?,atlantic salmon
+why not pacific,pacific salmon got shit that makes you have the shits if you eat it raw
+im eating raw pacific salmon,nvm it isn't the shits
+2?,@darter added some competition to your adobe desktop service
+@Known im competing now,oh shit uh
+*i dont actually need to use adobe photoshop*,Bet you dont have Adobe DNG converter
+FUCK,GOT IT
+@Known bet you dont have Live 12 Suite,i had it installed at one point
+L,free trial
+o,OH
