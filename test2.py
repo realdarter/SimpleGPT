@@ -162,7 +162,7 @@ if __name__ == "__main__":
 
     print(f"End of text token: {eos_token}")
     print(f"End of text token ID: {eos_token_id}")
-    train_on_dataset(model, tokenizer, dataset_path, num_epochs=0, batch_size=4, save_every=100, save_directory=save_directory)
+    train_on_dataset(model, tokenizer, dataset_path, num_epochs=30, batch_size=4, save_every=100, save_directory=save_directory)
 
     while True:
         inp = input("Ask Question: ")
