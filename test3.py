@@ -100,7 +100,7 @@ if __name__ == "__main__":
     # Add special tokens to tokenizer
     tokenizer.add_special_tokens({'bos_token': bos_token, 'eos_token': eos_token})
 
-    tokenized_texts = tokenize_encoded_texts(tokenizer=tokenizer, encoded_texts=encoded_texts, tokenizer_name='gpt2')
+    tokenized_texts = tokenize_encoded_texts(tokenizer=tokenizer, encoded_texts=encoded_texts)
     dataloader = create_dataloader(tokenized_texts, batch_size=batch_size)
 
     print_special_tokens()
