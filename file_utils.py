@@ -20,6 +20,15 @@ def ensure_file_exists(file_path):
     
     return True
 
+def read_txt_file(file_path):
+    """
+    Reads a text file and returns its contents as a list of strings.
+    Each line in the text file is considered a separate context.
+    """
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+    return [line.strip() for line in lines]
+
 def encode_csv(csv_path, out_path='csv_encoded.txt', header=True,
                start_token="<|startoftext|>",
                end_token="<|endoftext|>"):
