@@ -41,22 +41,29 @@ def decode_tokenize_text(tokenizer, token_ids, skip_special_tokens=False, remove
         decoded_text = decoded_text.replace(tokenizer.pad_token, "").strip()
     return decoded_text
 
-def tokenize_encoded_texts(tokenizer, encoded_texts, max_length=512):
+def ensure_pad_token(tokenizer):
+    """
+    Ensures the tokenizer has a pad token. If not, it adds a pad token.
+    """
+    if tokenizer.pad_token_id is None:
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+    return tokenizer
+
+def tokenize_dataset(tokenizer, texts, max_length=512):
     """
     Tokenizes a list of encoded texts and ensures each text is padded or truncated to a maximum length.
     """
     
-    if tokenizer.pad_token_id is None:
-        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+    ensure_pad_token(tokenizer)
 
-    tokenized_texts = [tokenize_text(tokenizer=tokenizer, text=text, max_length=max_length) for text in encoded_texts]
+    tokenized_texts = [tokenizer.encode_plus(text, truncation=True, padding='max_length', max_length=max_length, return_tensors='pt') for text in texts]
     return tokenized_texts
 
 def create_dataloader(tokenized_texts, batch_size=4):
     """
     Creates a DataLoader from tokenized texts.
     """
-    input_ids = torch.tensor(tokenized_texts, dtype=torch.long)
+    input_ids = torch.tensor([t['input_ids'].squeeze(0).tolist() for t in tokenized_texts], dtype=torch.long)
     dataset = TensorDataset(input_ids)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
