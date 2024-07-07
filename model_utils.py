@@ -2,59 +2,71 @@ import torch
 import torch.optim as optim
 from transformers import GPT2LMHeadModel
 import logging
-from exceptions import ModelTrainingError, ModelNotSaved, ModelNotLoaded
+from encoderdecoder import *  # Import the tokenizer wrapper from encoder_decoder.py
 
-logging.basicConfig(level=logging.INFO)
+def load_pretrained_model(model_name_or_path, tokenizer_name_or_path):
+    """
+    Loads a pre-trained GPT-2 model and tokenizer.
+    Args:
+    - model_name_or_path (str): Name or path of the pre-trained model.
+    - tokenizer_name_or_path (str): Name or path of the tokenizer associated with the model.
+    Returns:
+    - GPT2LMHeadModel: The loaded GPT-2 model.
+    - GPT2Tokenizer: The loaded GPT-2 tokenizer.
+    """
+    model = GPT2LMHeadModel.from_pretrained(model_name_or_path)
+    tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_name_or_path)
 
-class GPT2Dataset(torch.utils.data.Dataset):
-    def __init__(self, tokenized_data):
-        self.tokenized_data = tokenized_data
+    # Add padding token if not already added
+    if tokenizer.pad_token_id is None:
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
-    def __len__(self):
-        return len(self.tokenized_data)
+    return model, tokenizer
 
-    def __getitem__(self, idx):
-        return self.tokenized_data[idx]
+def check_gpt2_models_exist(model_path):
+    model_files = [
+        'config.json',
+        'merges.txt',
+        'pytorch_model.bin',
+        'tokenizer.json',
+        'training_args.bin',
+        'vocab.json',
+        'vocab.txt'
+    ]
+    models_exist = all(os.path.isfile(os.path.join(model_path, f'gpt2-{size}', file)) for size in ['small', 'medium', 'large', 'xl'] for file in model_files)
+    return models_exist
 
-def train_model(tokenized_data, num_epochs=3, learning_rate=5e-5):
-    try:
-        dataset = GPT2Dataset(tokenized_data)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
-        model = GPT2LMHeadModel.from_pretrained('gpt2')
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model.to(device)
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        model.train()
+def download_gpt2_124M(save_directory):
 
-        for epoch in range(num_epochs):
-            for batch in dataloader:
-                input_ids = batch['input_ids'].squeeze().to(device)
-                attention_mask = batch['attention_mask'].squeeze().to(device)
+    if check_gpt2_models_exist(save_directory):
+        return False
+    model_name = 'gpt2'
+    model = GPT2LMHeadModel.from_pretrained(model_name)
+    tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=input_ids)
-                loss = outputs.loss
+    # Add a padding token to the tokenizer
+    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+    # Save the model and tokenizer to the specified directory
+    model.save_pretrained(save_directory)
+    tokenizer.save_pretrained(save_directory)
 
-            logging.info(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item()}")
+    print(f"GPT-2 model (124M) downloaded and saved in {save_directory}")
+    return True
 
-        return model
-    except Exception as e:
-        raise ModelTrainingError(f"Error training GPT-2 model: {str(e)}")
 
-def save_model(model, model_name='gpt2', path='models/124M'):
-    try:
-        model.save_pretrained(path)
-        logging.info(f"Model '{model_name}' saved successfully.")
-    except Exception as e:
-        raise ModelNotSaved(model_name)
+if __name__ == "__main__":
+    save_path = 'checkpoint/run1'
+    csv_path = os.path.join(save_path, 'cleaned.csv')
+    encoded_csv_path = os.path.join(save_path, 'csv_encoded.txt')
+    batch_size = 4
+    num_epochs = 1
+    learning_rate = 5e-5
+    download_gpt2_124M(save_path)
 
-def load_model(model_name='gpt2', path='models/124M'):
-    try:
-        model = GPT2LMHeadModel.from_pretrained(path)
-        logging.info(f"Model '{model_name}' loaded successfully.")
-        return model
-    except Exception as e:
-        raise ModelNotLoaded(model_name)
+    ensure_file_exists(csv_path)
+    encode_csv(csv_path, encoded_csv_path, header=True)
+
+    # Step 1: Load pre-trained model and tokenizer
+    model_name_or_path = 'gpt2'
+    model, tokenizer = load_pretrained_model(model_name_or_path, model_name_or_path)
