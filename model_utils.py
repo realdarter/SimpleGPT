@@ -55,7 +55,7 @@ def check_gpt2_models_exist(model_path):
 
 def download_gpt2_124M(save_directory):
     if check_gpt2_models_exist(save_directory):
-        print("Model already exists. Skipping download.")
+        print("Model already exists. Not downloading.")
         return False
     global model, tokenizer
     model.save_pretrained(save_directory)
@@ -63,7 +63,7 @@ def download_gpt2_124M(save_directory):
     print(f"GPT-2 model (124M) downloaded and saved in {save_directory}")
     return True
 
-def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1):
+def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, save_every=500):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -72,11 +72,13 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1):
     
     model.resize_token_embeddings(len(tokenizer))
     model.to(device)
-
+    
+    print("Loading Data...")
     textlines = read_txt_file(dataset_path)  # Assuming this returns an array of texts
     input_ids, attention_masks, labels = tokenize_dataset(tokenizer, textlines)
     dataset = CustomDataset(input_ids, attention_masks, labels)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    print("Finished Loading Data")
 
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5)
     scaler = torch.cuda.amp.GradScaler()
@@ -85,6 +87,7 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1):
 
     start_time = time.time()  # Start timing the training process
 
+    iterations = 0
     for epoch in range(num_epochs):
         total_loss = 0
         optimizer.zero_grad()
@@ -106,6 +109,11 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1):
             elapsed_time = time.time() - start_time
             print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(dataloader)}], Loss: {loss.item()}, Elapsed Time: {elapsed_time:.2f} seconds")
 
+            iterations += 1
+            if iterations % save_every == 0:
+                model.save_pretrained(model_directory)
+                print(f"Model saved at iteration {iterations} in {model_directory}")
+
         avg_loss = total_loss / len(dataloader)
         print(f"Epoch {epoch+1} completed. Average Loss: {avg_loss}")
 
@@ -115,7 +123,7 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1):
     print(f"Training completed in {elapsed_time // 60:.0f} minutes and {elapsed_time % 60:.0f} seconds.")
 
     model.save_pretrained(model_directory)
-    print(f"Model saved in {model_directory}")
+    print(f"Final model saved in {model_directory}")
 
 def test_input(model_directory, prompt_text):
     # Check if GPU is available and use it if possible
@@ -146,7 +154,7 @@ def test_input(model_directory, prompt_text):
     # Decode the generated text
     generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
     generated_text_special = tokenizer.decode(output[0], skip_special_tokens=False)
-    print(f"Generated Text: {generated_text}")
+    #print(f"Generated Text: {generated_text}")
     print(f"Generated Text Special: {generated_text_special}")
 
 
@@ -155,18 +163,17 @@ if __name__ == "__main__":
     csv_path = os.path.join(save_path, 'cleaned.csv')
     encoded_txt_path = os.path.join(save_path, 'csv_encoded.txt')
     batch_size = 1  # Reduce batch size to fit within memory
-    num_epochs = 10
 
     # Load pre-trained model and tokenizer before attempting to save them
     model_name_or_path = 'gpt2'
     model, tokenizer = load_pretrained_model(model_name_or_path, model_name_or_path)
-    check_gpt2_models_exist(save_path)
-    #download_gpt2_124M(save_path)
+    #check_gpt2_models_exist(save_path)
+    download_gpt2_124M(save_path)
     ensure_file_exists(csv_path)
     encode_csv(csv_path, encoded_txt_path, header=True)
 
     # Uncomment this line to train the model
-    train_on_dataset(save_path, encoded_txt_path, num_epochs=num_epochs, batch_size=batch_size)
+    train_on_dataset(save_path, encoded_txt_path, num_epochs=5, batch_size=2)
 
     while True:
         test_prompt = input("Input: ")
