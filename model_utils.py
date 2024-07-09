@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import os
 from tokenization import *  # Import the tokenizer wrapper from encoder_decoder.py
@@ -24,6 +24,7 @@ class CustomDataset(Dataset):
             'attention_mask': self.attention_masks[idx],
             'labels': self.labels[idx]
         }
+
 def load_pretrained_model(model_name_or_path, tokenizer_name_or_path):
     global model, tokenizer
     model = GPT2LMHeadModel.from_pretrained(model_name_or_path)
@@ -33,19 +34,28 @@ def load_pretrained_model(model_name_or_path, tokenizer_name_or_path):
 
 def check_gpt2_models_exist(model_path):
     model_files = [
+        'added_tokens.json',
         'config.json',
+        'csv_encoded.txt',
+        'generation_config.json',
         'merges.txt',
-        'pytorch_model.bin',
-        'tokenizer.json',
-        'training_args.bin',
-        'vocab.json',
-        'vocab.txt'
+        'model.safetensors',
+        'special_tokens_map.json',
+        'tokenizer_config.json',
+        'vocab.json'
     ]
-    models_exist = all(os.path.isfile(os.path.join(model_path, f'gpt2-{size}', file)) for size in ['small', 'medium', 'large', 'xl'] for file in model_files)
-    return models_exist
+    all_files_exist = True
+    for file in model_files:
+        file_path = os.path.join(model_path, file)
+        absolute_path = os.path.abspath(file_path)  # Get the absolute path
+        if not os.path.isfile(absolute_path):
+            print(f"File missing: {absolute_path}")
+            all_files_exist = False
+    return all_files_exist
 
 def download_gpt2_124M(save_directory):
     if check_gpt2_models_exist(save_directory):
+        print("Model already exists. Skipping download.")
         return False
     global model, tokenizer
     model.save_pretrained(save_directory)
@@ -105,6 +115,7 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1):
     print(f"Training completed in {elapsed_time // 60:.0f} minutes and {elapsed_time % 60:.0f} seconds.")
 
     model.save_pretrained(model_directory)
+    print(f"Model saved in {model_directory}")
 
 def test_input(model_directory, prompt_text):
     # Check if GPU is available and use it if possible
@@ -118,48 +129,26 @@ def test_input(model_directory, prompt_text):
     # Move the model to the specified device (GPU or CPU)
     model.to(device)
 
-    # Tokenize the input text
+    # Add special tokens to the tokenizer if they are not already present
+    special_tokens_dict = {'pad_token': '<|pad|>', 'sep_token': '<|sep|>', 'eos_token': '<|endoftext|>', 'bos_token': '<|startoftext|>'}
+    num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
+    model.resize_token_embeddings(len(tokenizer))
+
+    # Prepend and append the special tokens to the prompt text
+    prompt_text = f"<|startoftext|>{prompt_text}<|endoftext|>"
+
+    # Encode the prompt text
     input_ids = tokenizer.encode(prompt_text, return_tensors='pt').to(device)
 
-    # Generate text based on the input using beam search
-    num_beams = 2
-    beam_output = model.generate(input_ids,
-                                 max_length=100,
-                                 num_beams=num_beams,
-                                 num_return_sequences=num_beams,
-                                 no_repeat_ngram_size=2,
-                                 early_stopping=True,
-                                 pad_token_id=tokenizer.eos_token_id)
+    # Generate text using the model
+    output = model.generate(input_ids, max_length=50, num_return_sequences=1, eos_token_id=tokenizer.eos_token_id)
 
-    # Print and decode the beam search outputs
-    print("Beam Output:")
-    skipped_tokens = []  # List to store tokens that couldn't be decoded
-    eos_token_id = tokenizer.eos_token_id
-    print(f"eos_token_id = {eos_token_id}")
+    # Decode the generated text
+    generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    generated_text_special = tokenizer.decode(output[0], skip_special_tokens=False)
+    print(f"Generated Text: {generated_text}")
+    print(f"Generated Text Special: {generated_text_special}")
 
-    for i, beam in enumerate(beam_output):
-        # Initialize list to store decoded tokens
-        decoded_tokens = []
-        
-        # Filter out None and padding tokens
-        filtered_beam = [token for token in beam.tolist() if token is not None and token != tokenizer.pad_token_id and token not in skipped_tokens]
-
-        for token in filtered_beam:
-            if token == eos_token_id:
-                break  # Stop decoding once EOS token is encountered
-
-            try:
-                decoded_token = tokenizer.decode(token, skip_special_tokens=False)
-                decoded_tokens.append(decoded_token)
-            except Exception as e:
-                print(f"Error decoding token {token}: {e}")
-                skipped_tokens.append(token)  # Add token to skipped list
-
-        # Join decoded tokens into a single string
-        decoded_beam = " ".join(decoded_tokens)
-        
-        print(f"Beam {i}: {decoded_beam}")
-        print()
 
 if __name__ == "__main__":
     save_path = 'checkpoint/run1'
@@ -171,12 +160,15 @@ if __name__ == "__main__":
     # Load pre-trained model and tokenizer before attempting to save them
     model_name_or_path = 'gpt2'
     model, tokenizer = load_pretrained_model(model_name_or_path, model_name_or_path)
-
-    download_gpt2_124M(save_path)
+    check_gpt2_models_exist(save_path)
+    #download_gpt2_124M(save_path)
     ensure_file_exists(csv_path)
     encode_csv(csv_path, encoded_txt_path, header=True)
 
+    # Uncomment this line to train the model
     train_on_dataset(save_path, encoded_txt_path, num_epochs=num_epochs, batch_size=batch_size)
 
-    test_prompt = "What are your thoughts on artificial intelligence?"
-    test_input(save_path, test_prompt)
+    while True:
+        test_prompt = input("Input: ")
+        test_prompt = f" {test_prompt} "
+        test_input(save_path, test_prompt)
