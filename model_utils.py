@@ -6,8 +6,6 @@ from tokenization import *  # Import the tokenizer wrapper from encoder_decoder.
 from file_utils import *
 import time
 
-model = None
-tokenizer = None
 
 class CustomDataset(Dataset):
     def __init__(self, input_ids, attention_masks, labels):
@@ -25,18 +23,10 @@ class CustomDataset(Dataset):
             'labels': self.labels[idx]
         }
 
-def load_pretrained_model(model_name_or_path, tokenizer_name_or_path):
-    global model, tokenizer
-    model = GPT2LMHeadModel.from_pretrained(model_name_or_path)
-    tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_name_or_path)
-    ensure_pad_token(tokenizer)
-    return model, tokenizer
-
 def check_gpt2_models_exist(model_path):
     model_files = [
         'added_tokens.json',
         'config.json',
-        'csv_encoded.txt',
         'generation_config.json',
         'merges.txt',
         'model.safetensors',
@@ -67,8 +57,8 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    model, tokenizer = load_pretrained_model(model_directory, model_directory)
-    ensure_pad_token(tokenizer)
+    model = GPT2LMHeadModel.from_pretrained(model_directory)
+    tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
     
     model.resize_token_embeddings(len(tokenizer))
     model.to(device)
@@ -86,6 +76,7 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, 
     model.train()
 
     start_time = time.time()  # Start timing the training process
+    total_steps = len(dataloader) * num_epochs
 
     iterations = 0
     for epoch in range(num_epochs):
@@ -107,7 +98,12 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, 
 
             total_loss += loss.item()
             elapsed_time = time.time() - start_time
-            print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(dataloader)}], Loss: {loss.item()}, Elapsed Time: {elapsed_time:.2f} seconds")
+            steps_completed = epoch * len(dataloader) + i + 1
+            steps_remaining = total_steps - steps_completed
+            avg_time_per_step = elapsed_time / steps_completed
+            estimated_time_remaining = avg_time_per_step * steps_remaining
+
+            print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(dataloader)}], Loss: {loss.item():.4f}, Elapsed Time: {elapsed_time:.2f} seconds, Estimated Time Remaining: {estimated_time_remaining:.2f} seconds")
 
             iterations += 1
             if iterations % save_every == 0:
@@ -125,7 +121,7 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, 
     model.save_pretrained(model_directory)
     print(f"Final model saved in {model_directory}")
 
-def test_input(model_directory, prompt_text):
+def test_input(model_directory, prompt_text, max_length=50, temperature=0.7, top_k=50, top_p=0.95, repetition_penalty=1.2):
     # Check if GPU is available and use it if possible
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -138,44 +134,79 @@ def test_input(model_directory, prompt_text):
     model.to(device)
 
     # Add special tokens to the tokenizer if they are not already present
-    special_tokens_dict = {'pad_token': '<|pad|>', 'sep_token': '<|sep|>', 'eos_token': '<|endoftext|>', 'bos_token': '<|startoftext|>'}
+    special_tokens_dict = {'pad_token': '[PAD]', 'sep_token': '<|septext|>', 'eos_token': '<|endoftext|>', 'bos_token': '<|startoftext|>'}
     num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
     model.resize_token_embeddings(len(tokenizer))
 
-    # Prepend and append the special tokens to the prompt text
-    prompt_text = f"<|startoftext|>{prompt_text}<|endoftext|>"
-
     # Encode the prompt text
     input_ids = tokenizer.encode(prompt_text, return_tensors='pt').to(device)
+    attention_mask = (input_ids != tokenizer.pad_token_id).long().to(device)
 
     # Generate text using the model
-    output = model.generate(input_ids, max_length=50, num_return_sequences=1, eos_token_id=tokenizer.eos_token_id)
+    output = model.generate(
+        input_ids,
+        attention_mask=attention_mask,
+        max_length=max_length,
+        temperature=temperature,
+        top_k=top_k,
+        top_p=top_p,
+        repetition_penalty=repetition_penalty,
+        pad_token_id=tokenizer.pad_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+        num_return_sequences=1
+    )
+
 
     # Decode the generated text
-    generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    #generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
     generated_text_special = tokenizer.decode(output[0], skip_special_tokens=False)
+
     #print(f"Generated Text: {generated_text}")
-    print(f"Generated Text Special: {generated_text_special}")
+    #print(f"Generated Text Special: {generated_text_special}")
+    return generated_text_special
+
+def generate_responses(model_directory, prompt_text, max_length=50, temperature=0.7, top_k=50, top_p=0.95, repetition_penalty=1.2):
+    """
+    Calls test_input to generate text and processes the output to separate the prompt and the responses.
+    Returns a list where the first element is the prompt and the rest are the generated responses.
+    """
+    # Call the test_input function to generate text
+    generated_text_special = test_input(
+        model_directory, prompt_text, max_length, temperature, top_k, top_p, repetition_penalty
+    )
+    before_tsep, sep, after_tsep = generated_text_special.partition('<|septext|>')
+    special_tokens_dict = {'pad_token': '[PAD]', 'sep_token': '<|septext|>', 'eos_token': '<|endoftext|>', 'bos_token': '<|startoftext|>'}
+    tokens_to_remove = special_tokens_dict.keys()
+
+    for token in tokens_to_remove:
+        before_tsep = before_tsep.replace(special_tokens_dict[token], '')
+        after_tsep = after_tsep.replace(special_tokens_dict[token], '')
+
+    return [before_tsep.strip(), after_tsep.strip()]
 
 
+"""
 if __name__ == "__main__":
-    save_path = 'checkpoint/run1'
-    csv_path = os.path.join(save_path, 'cleaned.csv')
-    encoded_txt_path = os.path.join(save_path, 'csv_encoded.txt')
+    model_path = 'checkpoint/run1'
+    csv_path = os.path.join(model_path, 'cleaned.csv')
+    encoded_txt_path = os.path.join(model_path, 'csv_encoded.txt')
     batch_size = 1  # Reduce batch size to fit within memory
+    if (ensure_file_exists(csv_path, create_if_missing=False)):
+        encode_csv(csv_path, encoded_txt_path, header=True)
+    else:
+        exit()
 
     # Load pre-trained model and tokenizer before attempting to save them
     model_name_or_path = 'gpt2'
-    model, tokenizer = load_pretrained_model(model_name_or_path, model_name_or_path)
     #check_gpt2_models_exist(save_path)
     download_gpt2_124M(save_path)
-    ensure_file_exists(csv_path)
-    encode_csv(csv_path, encoded_txt_path, header=True)
+
 
     # Uncomment this line to train the model
-    train_on_dataset(save_path, encoded_txt_path, num_epochs=5, batch_size=2)
+    #train_on_dataset(save_path, encoded_txt_path, num_epochs=1, batch_size=3)
 
     while True:
         test_prompt = input("Input: ")
-        test_prompt = f" {test_prompt} "
-        test_input(save_path, test_prompt)
+        test_prompt = f"<|startoftext|> {test_prompt} <|septext|>"
+        test_input(model_path, test_prompt)
+"""
