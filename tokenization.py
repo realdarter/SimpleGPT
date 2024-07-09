@@ -37,11 +37,4 @@ def ensure_pad_token(tokenizer):
         tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     return tokenizer
 
-def create_dataloader(input_ids, attention_masks, batch_size=4):
-    """
-    Creates a DataLoader from tokenized texts.
-    """
-    dataset = TensorDataset(input_ids, attention_masks)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    return dataloader
 
