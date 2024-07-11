@@ -5,7 +5,8 @@ import os
 from tokenization import *  # Import the tokenizer wrapper from encoder_decoder.py
 from file_utils import *
 import time
-import random
+
+CUDA_LAUNCH_BLOCKING=1
 
 class CustomDataset(Dataset):
     def __init__(self, input_ids, attention_masks, labels):
@@ -53,7 +54,7 @@ def download_gpt2_124M(save_directory):
     print(f"GPT-2 model (124M) downloaded and saved in {save_directory}")
     return True
 
-def train_model(model_directory, dataset_path, num_epochs=1, batch_size=1, save_every=500):
+def train_model(model_directory, dataset_array=[], num_epochs=1, batch_size=1, save_every=500):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -64,7 +65,7 @@ def train_model(model_directory, dataset_path, num_epochs=1, batch_size=1, save_
     model.to(device)
     
     print("Loading Data...")
-    textlines = read_txt_file(dataset_path)  # Assuming this returns an array of texts
+    textlines = dataset_array
     input_ids, attention_masks, labels = tokenize_dataset(tokenizer, textlines)
     dataset = CustomDataset(input_ids, attention_masks, labels)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -115,6 +116,9 @@ def train_model(model_directory, dataset_path, num_epochs=1, batch_size=1, save_
 
         avg_loss = total_loss / len(dataloader)
         print(f"Epoch {epoch+1} completed. Average Loss: {avg_loss}")
+        
+        model.save_pretrained(model_directory)
+        print(f"Model saved")
 
     end_time = time.time()  # End timing after training completes
     elapsed_time = end_time - start_time

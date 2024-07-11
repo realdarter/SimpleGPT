@@ -16,27 +16,27 @@ def tokenize_single_text(tokenizer, text, max_length=512):
         return_tensors='pt'
     )
     return {
-        'input_ids': encoded_text['input_ids'][0],
-        'attention_mask': encoded_text['attention_mask'][0]
+        'input_ids': encoded_text['input_ids'],
+        'attention_mask': encoded_text['attention_mask']
     }
 
 def tokenize_dataset(tokenizer, texts, max_length=512):
     """
-    Tokenizes a list of encoded texts and ensures each text is padded or truncated to a maximum length.
+    Tokenizes a list of texts and ensures each text is padded or truncated to a maximum length.
+    Returns input_ids, attention_masks, and labels.
     """
-    if isinstance(texts, str):
-        texts = [texts]
-
-    ensure_pad_token(tokenizer)
-
     tokenized_texts = [tokenize_single_text(tokenizer, text, max_length) for text in texts]
-    input_ids = torch.stack([item['input_ids'] for item in tokenized_texts], dim=0)
-    attention_masks = torch.stack([item['attention_mask'] for item in tokenized_texts], dim=0)
-    labels = torch.tensor([item['input_ids'][1:].tolist() + [tokenizer.eos_token_id] for item in tokenized_texts], dtype=torch.long)
+    
+    input_ids = torch.cat([item['input_ids'] for item in tokenized_texts], dim=0)
+    attention_masks = torch.cat([item['attention_mask'] for item in tokenized_texts], dim=0)
+    
+    # Generate labels: for language modeling, labels are the same as input_ids
+    labels = input_ids.clone()
 
-    return input_ids[0], attention_masks[0], labels[0]
+    return input_ids, attention_masks, labels
 
-def ensure_pad_token(tokenizer, pad_token = "[PAD]", sep_token="<|septext|>", eos_token="<|endoftext|>", bos_token="<|startoftext|>"):
+
+def ensure_tokens(tokenizer, pad_token = "[PAD]", sep_token="<|septext|>", eos_token="<|endoftext|>", bos_token="<|startoftext|>"):
     if tokenizer.pad_token is None:
         tokenizer.add_special_tokens({'pad_token': pad_token})
     if tokenizer.sep_token is None:
@@ -55,15 +55,15 @@ def decode_data(tokenizer, token_ids, skip_special_tokens=True):
     decoded_data = tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
     return decoded_data
 
-model_directory = 'checkpoint/run1'
-tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
-texts = "<|startoftext|> Hello Hi how are you <|septext|> I am good Thanks!"
+#model_directory = 'checkpoint/run1'
+#tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
+#texts = "<|startoftext|> Hello Hi how are you <|septext|> I am good Thanks!"
 
-input_ids, attention_masks, labels = tokenize_dataset(tokenizer, texts)
+#input_ids, attention_masks, labels = tokenize_dataset(tokenizer, texts)
 
-print("Input IDs:", input_ids)
-print("Attention Masks:", attention_masks)
-print("Labels:", labels)
+#print("Input IDs:", input_ids)
+#print("Attention Masks:", attention_masks)
+#print("Labels:", labels)
 
 #print(decode_data(tokenizer, attention_masks))
 #print("Attention Masks:", attention_masks)

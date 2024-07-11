@@ -1,18 +1,17 @@
 from model_utils import *
 import os
+CUDA_LAUNCH_BLOCKING=1
 
 if __name__ == "__main__":
     model_path = 'checkpoint/run1'
     csv_path = os.path.join(model_path, 'cleaned.csv')
-    encoded_txt_path = os.path.join(model_path, 'csv_encoded.txt')
+    csv_path = 'cleaned.csv'
+    #encoded_txt_path = os.path.join(model_path, 'csv_encoded.txt')
 
 
-    if (ensure_file_exists(csv_path, create_if_missing=False)):
-        prepare_csv(csv_path, encoded_txt_path, header=True)
-    else:
-        exit()
+    encoded_data = prepare_csv(csv_path)
+    print(encoded_data[0])
+    print(encoded_data[-1])
 
-    model_name_or_path = 'gpt2'
-
-    train_model(model_path, encoded_txt_path, num_epochs=10, batch_size=3)
+    train_model(model_path, encoded_data, num_epochs=10, batch_size=3, save_every=100)
 

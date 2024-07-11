@@ -37,21 +37,22 @@ def read_txt_file(file_path):
 
 
 
-def prepare_csv(csv_path, out_path='csv_encoded.txt', header=True, start_token="<|startoftext|>", sep_token = "<|septext|>", end_token="<|endoftext|>"):
+def prepare_csv(csv_path, header=True, start_token="<|startoftext|>", sep_token = "<|septext|>"):
     """ 
-    Encodes a CSV with multiple columns to a format suitable for GPT-2.
-    Automatically adds the specified start, separator, and end tokens.
-    Encodes a CSV file `csv_path` to `out_path` with optional `header` and tokens `start_token`, `sep_token`, and `end_token`.
+    Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
     """
-    with open(csv_path, 'r', encoding='utf8', errors='ignore') as f, \
-         open(out_path, 'w', encoding='utf8', errors='ignore') as w:
+    all_items = []
+    
+    with open(csv_path, 'r', encoding='utf8', errors='ignore') as f:
         reader = csv.reader(f)
         if header:
             next(reader)  # Skip the header
         for row in reader:
-            encoded_row = f"{start_token} " + f" {sep_token} ".join(row) + f" {end_token}\n"
-            w.write(encoded_row)
-    return out_path
+            encoded_row = f"{start_token} " + f" {sep_token} ".join(row)
+            all_items.append(encoded_row.strip())
+    
+    return all_items
+
 
 # Example usage
 """
