@@ -1,4 +1,4 @@
-
+# [NOT CURRENTLY FINISHED GIVE ME A MONTH!]
 # GPT-2 Chatbot Fine-Tuning 🤖
 Fine-tuning a pre-trained GPT-2 model for chat and reply tasks. The goal is to adapt the model to generate contextually coherent responses in a conversational setting. This Code takes in Reply and Response
 
