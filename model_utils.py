@@ -5,7 +5,7 @@ import os
 from tokenization import *  # Import the tokenizer wrapper from encoder_decoder.py
 from file_utils import *
 import time
-
+import random
 
 class CustomDataset(Dataset):
     def __init__(self, input_ids, attention_masks, labels):
@@ -53,7 +53,7 @@ def download_gpt2_124M(save_directory):
     print(f"GPT-2 model (124M) downloaded and saved in {save_directory}")
     return True
 
-def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, save_every=500):
+def train_model(model_directory, dataset_path, num_epochs=1, batch_size=1, save_every=500):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -95,6 +95,9 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, 
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
+            
+            total_loss += loss.item()
+            avg_loss = total_loss / (i + 1)
 
             total_loss += loss.item()
             elapsed_time = time.time() - start_time
@@ -103,7 +106,7 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, 
             avg_time_per_step = elapsed_time / steps_completed
             estimated_time_remaining = avg_time_per_step * steps_remaining
 
-            print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(dataloader)}], Loss: {loss.item():.4f}, Elapsed Time: {elapsed_time:.2f} seconds, Estimated Time Remaining: {estimated_time_remaining:.2f} seconds")
+            print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(dataloader)}], Loss: {loss.item():.4f}, Avg Loss: {avg_loss:.4f}, Elapsed Time: {elapsed_time:.2f} seconds, Estimated Time Remaining: {estimated_time_remaining:.2f} seconds")
 
             iterations += 1
             if iterations % save_every == 0:
@@ -121,7 +124,7 @@ def train_on_dataset(model_directory, dataset_path, num_epochs=1, batch_size=1, 
     model.save_pretrained(model_directory)
     print(f"Final model saved in {model_directory}")
 
-def test_input(model_directory, prompt_text, max_length=50, temperature=0.7, top_k=50, top_p=0.95, repetition_penalty=1.2):
+def test_input(model_directory, prompt_text, max_length=50, temperature=0.7, top_k=50, top_p=0.95, repetition_penalty=2.5):
     # Check if GPU is available and use it if possible
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -170,10 +173,14 @@ def generate_responses(model_directory, prompt_text, max_length=50, temperature=
     Calls test_input to generate text and processes the output to separate the prompt and the responses.
     Returns a list where the first element is the prompt and the rest are the generated responses.
     """
+
     # Call the test_input function to generate text
     generated_text_special = test_input(
         model_directory, prompt_text, max_length, temperature, top_k, top_p, repetition_penalty
     )
+
+    # Split the generated text into prompt and responses
+    print(generated_text_special)
     before_tsep, sep, after_tsep = generated_text_special.partition('<|septext|>')
     special_tokens_dict = {'pad_token': '[PAD]', 'sep_token': '<|septext|>', 'eos_token': '<|endoftext|>', 'bos_token': '<|startoftext|>'}
     tokens_to_remove = special_tokens_dict.keys()

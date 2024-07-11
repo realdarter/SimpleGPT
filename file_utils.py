@@ -35,7 +35,9 @@ def read_txt_file(file_path):
         lines = file.readlines()
     return [line.strip() for line in lines]
 
-def encode_csv(csv_path, out_path='csv_encoded.txt', header=True, start_token="<|startoftext|>", sep_token = "<|septext|>", end_token="<|endoftext|>"):
+
+
+def prepare_csv(csv_path, out_path='csv_encoded.txt', header=True, start_token="<|startoftext|>", sep_token = "<|septext|>", end_token="<|endoftext|>"):
     """ 
     Encodes a CSV with multiple columns to a format suitable for GPT-2.
     Automatically adds the specified start, separator, and end tokens.

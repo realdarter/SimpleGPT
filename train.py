@@ -8,13 +8,11 @@ if __name__ == "__main__":
 
 
     if (ensure_file_exists(csv_path, create_if_missing=False)):
-        encode_csv(csv_path, encoded_txt_path, header=True)
+        prepare_csv(csv_path, encoded_txt_path, header=True)
     else:
         exit()
 
-    # Load pre-trained model and tokenizer before attempting to save them
     model_name_or_path = 'gpt2'
 
+    train_model(model_path, encoded_txt_path, num_epochs=10, batch_size=3)
 
-    # Uncomment this line to train the model
-    train_on_dataset(model_path, encoded_txt_path, num_epochs=2, batch_size=3)
