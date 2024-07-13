@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
-from tokenization import *  # Import the tokenizer wrapper from encoder_decoder.py
+from tokenization import *  
 from file_utils import *
 import time
 from collections import deque
@@ -13,6 +13,10 @@ class CustomDataset(Dataset):
         self.input_ids = input_ids
         self.attention_masks = attention_masks
         self.labels = labels
+        print(f"Dataset size: {len(self.input_ids)}")  # Add this line
+        print(f"Dataset tokens: {(self.input_ids[0])}")  # Add this line
+        print(f"labels size: {len(self.labels)}")  # Add this line
+        print(f"labels tokens: {(self.labels)[0]}")  # Add this line
     def __len__(self):
         return len(self.input_ids)
 

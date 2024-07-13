@@ -55,12 +55,13 @@ def tokenize_dataset(tokenizer, texts, max_length=512, eos_token="<[EOS]>"):
     input_ids = torch.cat([item['input_ids'] for item in tokenized_texts], dim=0)
     attention_masks = torch.cat([item['attention_mask'] for item in tokenized_texts], dim=0)
     
-    labels = input_ids.clone().tolist()[0][1:]
-    labels.append(tokenizer.convert_tokens_to_ids(eos_token))
-    labels = torch.tensor(labels).unsqueeze(0)
+    labels = [ids[1:] + [tokenizer.convert_tokens_to_ids(eos_token)] for ids in input_ids.tolist()]
+    labels = torch.tensor(labels)
     
+    #print("List Leng for input ids")
+    #print(len(input_ids.tolist()))
 
-    return input_ids[0], attention_masks[0], labels[0]
+    return input_ids, attention_masks, labels
 
 
 def ensure_tokens(tokenizer, pad_token='<[PAD]>', sep_token='<[SEP]>', eos_token='<[EOS]>', bos_token='<[BOS]>'):
