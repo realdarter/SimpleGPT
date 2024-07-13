@@ -55,7 +55,6 @@ def tokenize_dataset(tokenizer, texts, max_length=512, eos_token="<[EOS]>"):
     input_ids = torch.cat([item['input_ids'] for item in tokenized_texts], dim=0)
     attention_masks = torch.cat([item['attention_mask'] for item in tokenized_texts], dim=0)
     
-    # Generate labels: for language modeling, labels are the same as input_ids
     labels = input_ids.clone().tolist()[0][1:]
     labels.append(tokenizer.convert_tokens_to_ids(eos_token))
     labels = torch.tensor(labels).unsqueeze(0)
