@@ -35,20 +35,20 @@ def read_txt_file(file_path):
         lines = file.readlines()
     return [line.strip() for line in lines]
 
-def prepare_csv(csv_path, header=True, start_token="<[EOS]>", sep_token = "<[SEP]>"):
+def prepare_csv(csv_path, header=True, start_token="<[EOS]>", sep_token="<[SEP]>"):
     """ 
     Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
     """
     all_items = []
     
-    with open(csv_path, 'r', encoding='utf8', errors='ignore') as f:
+    with open(csv_path, 'r', encoding='utf-8', errors='ignore') as f:
         reader = csv.reader(f)
         if header:
             next(reader)
         for row in reader:
-            encoded_row = f"{start_token} " + f" {sep_token} ".join(row)
+            stripped_row = [item.strip() for item in row]
+            encoded_row = f"{start_token} " + f" {sep_token} ".join(stripped_row)
             all_items.append(encoded_row.strip())
-    
     return all_items
 
 def check_gpt2_models_exist(model_path):
@@ -69,3 +69,4 @@ def check_gpt2_models_exist(model_path):
             print(f"File missing: {absolute_path}")
             all_files_exist = False
     return all_files_exist
+

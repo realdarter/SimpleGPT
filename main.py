@@ -29,7 +29,7 @@ def replace_placeholders(text, userID):
 
 if __name__ == "__main__":
     model_path = 'checkpoint/run1'
-    channel_id = '1088041838268657724'
+    channel_id = '1180990073433505892'
     
     global last_message_timestamp
     last_message_timestamp = 0
@@ -47,10 +47,10 @@ if __name__ == "__main__":
 
         if ((current_message is not None) and (current_message['timestamp'] != last_message_timestamp) and (current_message['content'] != '') and (current_message['username'] != current_user)):
             print(f"Found New Message: {current_message['content']}")
-            trimmed_message = f"<|startoftext|> {current_message['content'].strip()} <|septext|>"
+            trimmed_message = f"<[BOS]> {current_message['content'].strip()} <[SEP]>"
             #trimmed_message = f"{current_message['content'].strip()}"
             try:
-                gen_response = generate_responses(model_path, trimmed_message, temperature=0.9, max_length=len(trimmed_message)+ 50)
+                gen_response = generate_responses(model_path, trimmed_message, temperature=0.9, max_length=len(trimmed_message)+ 50, repetition_penalty=2.0)
                 filtered_message = replace_placeholders(gen_response[1], current_message['referenced_author_id'])
                 send_message(read_token(), channel_id, message="*[Dartiros AI]:* " + filtered_message, reply_to=current_message['message_id'])
                 last_message_timestamp = current_message['timestamp']

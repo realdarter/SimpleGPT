@@ -137,7 +137,7 @@ def test_input(model_directory, prompt_text, max_length=50, temperature=0.7, top
     input_ids = tokenizer.encode(prompt_text, return_tensors='pt').to(device)
     attention_mask = (input_ids != tokenizer.pad_token_id).long().to(device)
 
-    # Generate text using the model
+    # Generate text using the model with sampling
     output = model.generate(
         input_ids,
         attention_mask=attention_mask,
@@ -146,19 +146,17 @@ def test_input(model_directory, prompt_text, max_length=50, temperature=0.7, top
         top_k=top_k,
         top_p=top_p,
         repetition_penalty=repetition_penalty,
+        do_sample=True,  # Enable sampling
         pad_token_id=tokenizer.pad_token_id,
         eos_token_id=tokenizer.eos_token_id,
         num_return_sequences=1
     )
 
-
     # Decode the generated text
-    #generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
     generated_text_special = tokenizer.decode(output[0], skip_special_tokens=False)
 
-    #print(f"Generated Text: {generated_text}")
-    #print(f"Generated Text Special: {generated_text_special}")
     return generated_text_special
+
 
 def generate_responses(model_directory, prompt_text, max_length=50, temperature=0.7, top_k=50, top_p=0.95, repetition_penalty=1.2):
     """
@@ -172,14 +170,14 @@ def generate_responses(model_directory, prompt_text, max_length=50, temperature=
     )
 
     # Split the generated text into prompt and responses
-    #print(generated_text_special)
     before_tsep, sep, after_tsep = generated_text_special.partition('<[SEP]>')
+    
+    # Remove special tokens from segments
     special_tokens_dict = {'pad_token': '<[PAD]>', 'sep_token': '<[SEP]>', 'eos_token': '<[EOS]>', 'bos_token': '<[BOS]>'}
-    tokens_to_remove = special_tokens_dict.keys()
-
+    tokens_to_remove = special_tokens_dict.values()
+    
     for token in tokens_to_remove:
-        before_tsep = before_tsep.replace(special_tokens_dict[token], '')
-        after_tsep = after_tsep.replace(special_tokens_dict[token], '')
+        before_tsep = before_tsep.replace(token, '').strip()
+        after_tsep = after_tsep.replace(token, '').strip()
 
-    return [before_tsep.strip(), after_tsep.strip()]
-
+    return [before_tsep, after_tsep]
