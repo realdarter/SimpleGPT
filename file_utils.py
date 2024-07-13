@@ -37,7 +37,7 @@ def read_txt_file(file_path):
 
 
 
-def prepare_csv(csv_path, header=True, start_token="<|startoftext|>", sep_token = "<|septext|>"):
+def prepare_csv(csv_path, header=True, start_token="<[EOS]>", sep_token = "<[SEP]>"):
     """ 
     Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
     """
