@@ -188,8 +188,8 @@ def generate_responses(model_directory, prompt_text, max_length=50, temperature=
 
     # Split the generated text into prompt and responses
     print(generated_text_special)
-    before_tsep, sep, after_tsep = generated_text_special.partition('<|septext|>')
-    special_tokens_dict = {'pad_token': '[PAD]', 'sep_token': '<|septext|>', 'eos_token': '<|endoftext|>', 'bos_token': '<|startoftext|>'}
+    before_tsep, sep, after_tsep = generated_text_special.partition('<|SEP|>')
+    special_tokens_dict = {'pad_token': '<[PAD]>', 'sep_token': '<|SEP|>', 'eos_token': '<|EOS|>', 'bos_token': '<|BOS|>'}
     tokens_to_remove = special_tokens_dict.keys()
 
     for token in tokens_to_remove:
