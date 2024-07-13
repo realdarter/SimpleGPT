@@ -121,17 +121,6 @@ def train_model(model_directory, dataset_array=[], num_epochs=1, batch_size=1, s
     print(f"Training completed in {total_elapsed_time // 60:.0f} minutes and {total_elapsed_time % 60:.0f} seconds.")
 
 
-
-
-
-
-
-
-
-
-
-
-
 def test_input(model_directory, prompt_text, max_length=50, temperature=0.7, top_k=50, top_p=0.95, repetition_penalty=2.5):
     # Check if GPU is available and use it if possible
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -144,7 +133,7 @@ def test_input(model_directory, prompt_text, max_length=50, temperature=0.7, top
     model.to(device)
 
     # Add special tokens to the tokenizer if they are not already present
-    special_tokens_dict = {'pad_token': '[PAD]', 'sep_token': '<[SEP]>', 'eos_token': '<[EOS]>', 'bos_token': '<[BOS]>'}
+    special_tokens_dict = {'pad_token': '<[PAD]>', 'sep_token': '<[SEP]>', 'eos_token': '<[EOS]>', 'bos_token': '<[BOS]>'}
     num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
     model.resize_token_embeddings(len(tokenizer))
 
@@ -187,9 +176,9 @@ def generate_responses(model_directory, prompt_text, max_length=50, temperature=
     )
 
     # Split the generated text into prompt and responses
-    print(generated_text_special)
-    before_tsep, sep, after_tsep = generated_text_special.partition('<|SEP|>')
-    special_tokens_dict = {'pad_token': '<[PAD]>', 'sep_token': '<|SEP|>', 'eos_token': '<|EOS|>', 'bos_token': '<|BOS|>'}
+    #print(generated_text_special)
+    before_tsep, sep, after_tsep = generated_text_special.partition('<[SEP]>')
+    special_tokens_dict = {'pad_token': '<[PAD]>', 'sep_token': '<[SEP]>', 'eos_token': '<[EOS]>', 'bos_token': '<[BOS]>'}
     tokens_to_remove = special_tokens_dict.keys()
 
     for token in tokens_to_remove:
