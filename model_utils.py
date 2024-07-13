@@ -13,7 +13,10 @@ class CustomDataset(Dataset):
         self.input_ids = input_ids
         self.attention_masks = attention_masks
         self.labels = labels
-
+        print(f"Dataset size: {len(self.input_ids)}")  # Add this line
+        print(f"Dataset tokens: {(self.input_ids)}")  # Add this line
+        print(f"labels size: {len(self.labels)}")  # Add this line
+        print(f"labels tokens: {(self.labels)}")  # Add this line
     def __len__(self):
         return len(self.input_ids)
 
