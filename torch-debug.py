@@ -62,9 +62,11 @@ def print_cuda_info():
     """
     if torch.cuda.is_available():
         print(f"Using CUDA {torch.version.cuda} ({torch.cuda.get_device_name(0)})")
-        print(f"CUDA path: {torch.utils.cpp_extension.CUDA_HOME}")
+        cuda_home = os.environ.get('CUDA_HOME', 'Not found')
+        print(f"CUDA path: {cuda_home}")
     else:
         print("CUDA is not available. Running on CPU.")
+
 
 # Main function to execute the checks
 def main():
