@@ -5,7 +5,7 @@ from tokenization import *
 
 if __name__ == "__main__":
     model_directory = 'checkpoint/run1'  # Replace with your actual model directory
-    prompt_text = "Hello, how are you?"
+    prompt_text = "<[BOS]> Hello, how are you? <[SEP]>"
 
     responses = generate_responses(model_directory, prompt_text)
     prompt = responses[0]
