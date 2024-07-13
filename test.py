@@ -2,15 +2,14 @@ from model_utils import *
 import re
 from tokenization import *
 
-model_path = 'checkpoint/run1'
-model = GPT2LMHeadModel.from_pretrained(model_path)
-tokenizer = GPT2Tokenizer.from_pretrained(model_path)
 
-texts = "Hello I am 😀😃😄😁"
-tokdata= tokenize_single_text(tokenizer, texts, max_length=512)
-token_ids = tokdata['input_ids'][0]
-print(token_ids)
+if __name__ == "__main__":
+    model_directory = 'checkpoint/run1'  # Replace with your actual model directory
+    prompt_text = "Hello, how are you?"
 
-# Ensure tokdata[1] is a flat list of token IDs
-decodeddata = decode_data(tokenizer, token_ids)
-print(decodeddata)
+    responses = generate_responses(model_directory, prompt_text)
+    prompt = responses[0]
+    generated_response = responses[1]
+
+    print(f"Prompt: {prompt}")
+    print(f"Generated Response: {generated_response}")
