@@ -35,8 +35,6 @@ def read_txt_file(file_path):
         lines = file.readlines()
     return [line.strip() for line in lines]
 
-
-
 def prepare_csv(csv_path, header=True, start_token="<[EOS]>", sep_token = "<[SEP]>"):
     """ 
     Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
@@ -46,22 +44,28 @@ def prepare_csv(csv_path, header=True, start_token="<[EOS]>", sep_token = "<[SEP
     with open(csv_path, 'r', encoding='utf8', errors='ignore') as f:
         reader = csv.reader(f)
         if header:
-            next(reader)  # Skip the header
+            next(reader)
         for row in reader:
             encoded_row = f"{start_token} " + f" {sep_token} ".join(row)
             all_items.append(encoded_row.strip())
     
     return all_items
 
-
-# Example usage
-"""
-if __name__ == "__main__":
-    save_path = 'checkpoint\\run1'
-    csv_path = os.path.join(save_path, 'cleaned.csv')
-    encoded_csv_path = os.path.join(save_path, 'csv_encoded.txt')
-    
-    if ensure_file_exists(csv_path):
-        encode_csv(csv_path, encoded_csv_path, header=True)
-
-"""
+def check_gpt2_models_exist(model_path):
+    model_files = [
+        'config.json',
+        'generation_config.json',
+        'merges.txt',
+        'model.safetensors',
+        'special_tokens_map.json',
+        'tokenizer_config.json',
+        'vocab.json'
+    ]
+    all_files_exist = True
+    for file in model_files:
+        file_path = os.path.join(model_path, file)
+        absolute_path = os.path.abspath(file_path)  # Get the absolute path
+        if not os.path.isfile(absolute_path):
+            print(f"File missing: {absolute_path}")
+            all_files_exist = False
+    return all_files_exist
