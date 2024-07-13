@@ -57,9 +57,6 @@ def tokenize_dataset(tokenizer, texts, max_length=512, eos_token="<[EOS]>"):
     
     labels = [ids[1:] + [tokenizer.convert_tokens_to_ids(eos_token)] for ids in input_ids.tolist()]
     labels = torch.tensor(labels)
-    
-    #print("List Leng for input ids")
-    #print(len(input_ids.tolist()))
 
     return input_ids, attention_masks, labels
 
