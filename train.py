@@ -12,5 +12,6 @@ if __name__ == "__main__":
 
     download_gpt2_124M(model_path)
     # Train the model
-    train_model(model_path, encoded_data, num_epochs=100, batch_size=3, save_every=500)
+    train_model(model_path, encoded_data, num_epochs=10, batch_size=3, save_every=500)
 
+B 

@@ -70,7 +70,7 @@ def train_model(model_directory, dataset_array=[], num_epochs=1, batch_size=1, s
 
     total_steps = len(dataloader) * num_epochs
     start_time = time.time()
-
+    print("Training")
     model.train()
     recent_losses = deque(maxlen=20)  # Keeps track of last 20 losses
 
@@ -168,7 +168,7 @@ def generate_responses(model_directory, prompt_text, max_length=50, temperature=
     generated_text_special = test_input(
         model_directory, prompt_text, max_length, temperature, top_k, top_p, repetition_penalty
     )
-
+    print(generated_text_special)
     # Split the generated text into prompt and responses
     before_tsep, sep, after_tsep = generated_text_special.partition('<[SEP]>')
     

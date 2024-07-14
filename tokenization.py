@@ -50,17 +50,20 @@ def tokenize_dataset(tokenizer, texts, max_length=512, eos_token="<[EOS]>"):
     """
     if isinstance(texts, str):
         texts = [texts]
-    tokenized_texts = [tokenize_single_text(tokenizer, text, max_length) for text in texts]
+        
+    tokenized_texts = [tokenizer.encode_plus(text, max_length=max_length, truncation=True, padding='max_length') for text in texts]
     
-    input_ids = torch.cat([item['input_ids'][:, :-1] for item in tokenized_texts], dim=0)
-    input_ids = torch.cat([input_ids, torch.full_like(input_ids[:, :1], tokenizer.convert_tokens_to_ids(eos_token))], dim=1)
-    attention_masks = torch.cat([item['attention_mask'] for item in tokenized_texts], dim=0)
+    input_ids = torch.tensor([item['input_ids'] for item in tokenized_texts], dtype=torch.long)
+    attention_masks = torch.tensor([item['attention_mask'] for item in tokenized_texts], dtype=torch.long)
     
-    #labels = [ids[1:] + [tokenizer.convert_tokens_to_ids(eos_token)] for ids in input_ids.tolist()]
-    #labels = torch.tensor(labels)
+    eos_ids = tokenizer.convert_tokens_to_ids(eos_token)
+    eos_tensor = torch.full((input_ids.size(0), 1), eos_ids, dtype=torch.long)
+    input_ids = torch.cat([input_ids, eos_tensor], dim=1)
+    
+    attention_masks = torch.cat([attention_masks, torch.ones((attention_masks.size(0), 1), dtype=torch.long)], dim=1)
+    
     labels = input_ids.clone()
-    #labels[:, -1] = tokenizer.convert_tokens_to_ids(eos_token)
-    #input_ids = labels
+    
     return input_ids, attention_masks, labels
 
 
@@ -99,7 +102,7 @@ def decode_data(tokenizer, token_ids, skip_special_tokens=True):
     decoded_data = tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
     return decoded_data
 
-"""
+#"""
 # Example usage:
 model_directory = 'checkpoint/run1'
 tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
@@ -108,7 +111,8 @@ ensure_tokens(tokenizer)
 texts = "<[BOS]> Hello 🌍 [⎝oofShorts⎠✔ ᶦˢ ᵃ ⁿᵒᵒᵇ] Hi how are you <[SEP]> I am 😀 good Thanks!"
 
 input_ids, attention_masks, labels = tokenize_dataset(tokenizer, texts)
-
+print(input_ids)
+print(attention_masks)
 decoded_input = decode_data(tokenizer, input_ids[0].tolist(), skip_special_tokens=False)
 print("Decoded Input IDS:", decoded_input)
 
@@ -116,8 +120,4 @@ decoded_labels = decode_data(tokenizer, labels[0].tolist(), skip_special_tokens=
 print(len(decoded_labels))
 print("Decoded Input IDS:", decoded_labels)
 
-
-encoded_text = texts.encode('utf-8-sig')
-decoded_text = encoded_text.decode('utf-8')
-print(encoded_text)
-"""
+#"""
