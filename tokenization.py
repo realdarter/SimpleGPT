@@ -102,7 +102,7 @@ def decode_data(tokenizer, token_ids, skip_special_tokens=True):
     decoded_data = tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
     return decoded_data
 
-#"""
+"""
 # Example usage:
 model_directory = 'checkpoint/run1'
 tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
@@ -120,4 +120,4 @@ decoded_labels = decode_data(tokenizer, labels[0].tolist(), skip_special_tokens=
 print(len(decoded_labels))
 print("Decoded Input IDS:", decoded_labels)
 
-#"""
+"""
