@@ -5,6 +5,7 @@ CUDA_LAUNCH_BLOCKING=1
 
 if __name__ == "__main__":
     model_path = 'checkpoint/run1'
+    #model_path = 'checkpoint/reddit'
     csv_path = os.path.join(model_path, 'cleaned.csv')
 
     # Prepare the CSV data
@@ -14,4 +15,3 @@ if __name__ == "__main__":
     # Train the model
     train_model(model_path, encoded_data, num_epochs=10, batch_size=3, save_every=500)
 
-B 
