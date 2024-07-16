@@ -35,7 +35,7 @@ def read_txt_file(file_path):
         lines = file.readlines()
     return [line.strip() for line in lines]
 
-def prepare_csv(csv_path, header=True, start_token="<[EOS]>", sep_token="<[SEP]>"):
+def prepare_csv(csv_path, header=True, start_token="<[BOS]>", sep_token="<[SEP]>"):
     """ 
     Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
     """
@@ -70,3 +70,5 @@ def check_gpt2_models_exist(model_path):
             all_files_exist = False
     return all_files_exist
 
+#items = prepare_csv("checkpoint/run1/cleaned.csv")
+#print(items[0])
