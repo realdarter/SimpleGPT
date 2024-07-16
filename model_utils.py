@@ -55,6 +55,8 @@ def train_model(model_directory, dataset_array=[], num_epochs=1, batch_size=1, s
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    download_gpt2_124M(model_directory)
+
     model, tokenizer = load_model_and_tokenizer(model_directory)
 
     ensure_tokens(tokenizer)
@@ -176,8 +178,26 @@ def generate_responses(model_directory, prompt_text, max_length=50, temperature=
     special_tokens_dict = {'pad_token': '<[PAD]>', 'sep_token': '<[SEP]>', 'eos_token': '<[EOS]>', 'bos_token': '<[BOS]>'}
     tokens_to_remove = special_tokens_dict.values()
     
+    #for token in tokens_to_remove:
+        #before_tsep = before_tsep.replace(token, '').strip()
+        #after_tsep = after_tsep.replace(token, '').strip()
+
+    after_tsep = after_tsep.replace('<[BOS]>', '').strip()
+    while after_tsep.startswith('<[SEP]>') or after_tsep.startswith('<[BOS]>'):
+        if after_tsep.startswith('<[SEP]>'):
+            after_tsep = after_tsep[len('<[SEP]>'):].strip()
+        if after_tsep.startswith('<[BOS]>'):
+            after_tsep = after_tsep[len('<[BOS]>'):].strip()
+    split_text = after_tsep.split('<[SEP]>')
+
+    # If the split results in an empty list, return the original text as a single-element list
+    if len(split_text) == 1 and split_text[0] == split_text:
+        split_text = [split_text.strip()]
+    split_text = split_text[0]
+
     for token in tokens_to_remove:
         before_tsep = before_tsep.replace(token, '').strip()
-        after_tsep = after_tsep.replace(token, '').strip()
+        split_text = split_text.replace(token, '').strip()
 
-    return [before_tsep, after_tsep]
+    return [before_tsep, split_text]
+    #return [before_tsep, after_tsep]
