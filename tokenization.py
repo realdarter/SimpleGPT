@@ -69,7 +69,17 @@ def tokenize_dataset(tokenizer, texts, max_length=512, eos_token="<[EOS]>"):
 
 
 def ensure_tokens(model, tokenizer, pad_token='<[PAD]>', sep_token='<[SEP]>', eos_token='<[EOS]>', bos_token='<[BOS]>'):
-    # Create a dictionary of special tokens
+    """
+    Adds special tokens to the tokenizer and adjusts the model's token embeddings to account for these tokens.
+    Args:
+        model: The model object (e.g., a Hugging Face Transformers model) that needs its token embeddings resized.
+        tokenizer: The tokenizer object (e.g., a Hugging Face Transformers tokenizer) to which special tokens will be added.
+        pad_token (str, optional): The token used for padding sequences. Defaults to '<[PAD]>'.
+        sep_token (str, optional): The token used to separate sequences. Defaults to '<[SEP]>'.
+        eos_token (str, optional): The token used to indicate the end of a sequence. Defaults to '<[EOS]>'.
+        bos_token (str, optional): The token used to indicate the beginning of a sequence. Defaults to '<[BOS]>'.
+    Returns: None
+    """
     special_tokens_dict = {
         'pad_token': pad_token,
         'sep_token': sep_token,
