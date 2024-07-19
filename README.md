@@ -61,19 +61,16 @@ csv_path = os.path.join(model_path, 'cleaned.csv')
 # Prepare the CSV data
 args = create_training_args(
   num_epochs=3,
-  batch_size=8,
+  batch_size=4,
   learning_rate=3e-5,
   save_every=1000,
   max_length=512,
-  temperature=0.8,
-  top_k=60,
-  top_p=0.92,
-  repetition_penalty=1.2
 )
+train_model(model_path, csv_path, args)
 ```
 
-# Train the model (You can stop the model by exiting any time)
-train_model(model_path, csv_path, args)
+# Test
+
 ```python
 from model_utils import *
 model_directory = 'checkpoint/cleaned.csv'  # Replace with your actual model directory
@@ -81,10 +78,6 @@ model_directory = 'checkpoint/cleaned.csv'  # Replace with your actual model dir
 prompt_text = input("Input: ")
 
 args = create_training_args(
-   num_epochs=3,
-   batch_size=8,
-   learning_rate=3e-5,
-   save_every=1000,
    max_length=512,
    temperature=0.8,
    top_k=60,
