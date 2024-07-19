@@ -7,7 +7,18 @@ if __name__ == "__main__":
     while True:
         prompt_text = input("Input: ")
 
-        response = generate_responses(model_directory, prompt_text, args=create_training_args(), clean_result=True)
+        args = create_training_args(
+            num_epochs=3,
+            batch_size=8,
+            learning_rate=3e-5,
+            save_every=1000,
+            max_length=512,
+            temperature=0.8,
+            top_k=60,
+            top_p=0.92,
+            repetition_penalty=1.2
+        )
+        response = generate_responses(model_directory, prompt_text, args=args, clean_result=True)
 
         print(f"Prompt: {prompt_text}")
         print(f"Generated Response: {response}")
