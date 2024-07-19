@@ -1,4 +1,3 @@
-# [NOT CURRENTLY FINISHED GIVE ME A MONTH!]
 # GPT-2 Chatbot Fine-Tuning 🤖
 Fine-tuning a pre-trained GPT-2 model for chat and reply tasks. The goal is to adapt the model to generate contextually coherent responses in a conversational setting. This Code takes in Reply and Response
 
@@ -19,17 +18,29 @@ Fine-tuning a pre-trained GPT-2 model for chat and reply tasks. The goal is to a
 # Steps
 1. **Install Dependencies**:
    ```bash
-   pip install torch transformers datasets
+   pip install torch 
+   pip install transformers
+   pip install pandas
    ```
+   Preferably install torch using NVIDIA GPU
+   ```bash
+   pip install torch==2.3.1+cu121 -f https://download.pytorch.org/whl/torch_stable.html```
 
-2. **Download Pre-trained GPT-2 Model**:
+3. **Download Pre-trained GPT-2 Model**:
    Load the tokenizer and model from the Hugging Face library.
 
-3. **Prepare Dataset**:
+4. **Prepare Dataset**:
    Create a dataset of context-response pairs for fine-tuning.
    Example of Context, Reply
    ![image](https://github.com/realdarter/Goose-AI/assets/100169417/7b65736c-4efd-430e-b408-b584d38a78cd)
 
+   ```
+   context,reply
+   How are you doing so far?,I am doing fine!
+   lol!,Thats funny
+   "I need to talk to you","What, do, you, want"
+   Food is an important part of our life, You are making me very hungry.
+   ```
 
 5. **Tokenize Dataset**:
    The Code will Auto-Tokenize the context-response pairs to prepare them for model training.
