@@ -1,7 +1,5 @@
 from model_utils import *
-from file_utils import *
 import os
-CUDA_LAUNCH_BLOCKING=1
 
 if __name__ == "__main__":
     model_path = 'checkpoint/delete'
