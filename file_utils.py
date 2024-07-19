@@ -46,8 +46,9 @@ def prepare_csv(csv_path, header=True, start_token="<[BOS]>", sep_token="<[SEP]>
         if header:
             next(reader)
         for row in reader:
-            stripped_row = [item.strip() for item in row]
+            stripped_row = [item.strip().replace('"', '') for item in row]
             encoded_row = f"{start_token} " + f" {sep_token} ".join(stripped_row)
+            #print(encoded_row)
             all_items.append(encoded_row.strip())
     return all_items
 

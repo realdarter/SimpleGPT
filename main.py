@@ -28,8 +28,8 @@ def replace_placeholders(text, userID):
     return text
 
 if __name__ == "__main__":
-    model_path = 'checkpoint/run1'
-    channel_id = '1088041838268657724'
+    model_path = 'checkpoint/lgbtqsave'
+    channel_id = '1180990073433505892'
     
     global last_message_timestamp
     last_message_timestamp = 0
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         #test_prompt = f"<|startoftext|> {test_prompt} <|septext|>"
         #print(generate_responses(model_path, test_prompt))
         current_message = retrieve_last_message(token, channel_id)
-
+        #if ((current_message is not None) and (current_message['timestamp'] != last_message_timestamp) and (current_message['content'] != '') and (current_message['username'] == "Beef Bot")):
         if ((current_message is not None) and (current_message['timestamp'] != last_message_timestamp) and (current_message['content'] != '') and (current_message['username'] != current_user)):
             print(f"Found New Message: {current_message['content']}")
             trimmed_message = f"<[BOS]> {current_message['content'].strip()} <[SEP]>"

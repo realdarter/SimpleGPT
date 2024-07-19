@@ -3,7 +3,7 @@ import re
 from tokenization import *
 
 if __name__ == "__main__":
-    model_directory = 'checkpoint/run1'  # Replace with your actual model directory
+    model_directory = 'checkpoint/lgbtqsave'  # Replace with your actual model directory
     while True:
         prompt_text = input("Input: ")
         prompt_text = f"<[BOS]> {prompt_text} <[SEP]>"
