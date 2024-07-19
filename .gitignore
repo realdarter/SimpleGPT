@@ -6,3 +6,5 @@ cleaned.csv
 *.txt
 /model/
 cleaned2.csv
+discord.py
+main.py
