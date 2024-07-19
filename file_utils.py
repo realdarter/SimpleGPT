@@ -26,18 +26,15 @@ def ensure_file_exists(file_path, create_if_missing=True):
     else:
         return False
 
-def read_txt_file(file_path):
-    """
-    Reads a text file and returns its contents as a list of strings.
-    Each line in the text file is considered a separate context.
-    """
-    with open(file_path, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
-    return [line.strip() for line in lines]
-
 def prepare_csv(csv_path, header=True, start_token='', sep_token=''):
     """ 
     Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
+    Args:
+        csv_path (str): The path to the CSV file to read.
+        header (bool, optional): Whether the CSV file includes a header row. Defaults to True.
+        start_token (str, optional): A token to prepend to each row's content. Defaults to ''.
+        sep_token (str, optional): A token to insert between items in a row. Defaults to ''.
+    Returns: list: A list of formatted strings, each representing a row from the CSV file.
     """
     all_items = []
     
@@ -53,6 +50,12 @@ def prepare_csv(csv_path, header=True, start_token='', sep_token=''):
     return all_items
 
 def check_gpt2_models_exist(model_path):
+    """
+    Checks if all necessary files for a GPT-2 model exist in the specified directory.
+    Args: model_path (str): The path to the directory containing model files.
+    
+    Returns: bool: True if all required files exist, False if any file is missing.
+    """
     model_files = [
         'config.json',
         'generation_config.json',
@@ -70,6 +73,3 @@ def check_gpt2_models_exist(model_path):
             print(f"File missing: {absolute_path}")
             all_files_exist = False
     return all_files_exist
-
-#items = prepare_csv("checkpoint/run1/cleaned.csv")
-#print(items[0])
