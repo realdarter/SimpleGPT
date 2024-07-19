@@ -70,6 +70,7 @@ args = create_training_args(
   top_p=0.92,
   repetition_penalty=1.2
 )
+```
 
 # Train the model (You can stop the model by exiting any time)
 train_model(model_path, csv_path, args)
