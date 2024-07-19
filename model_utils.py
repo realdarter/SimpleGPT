@@ -190,7 +190,7 @@ def clean_text(uncleaned_text,  pad_token = '', sep_token = '', eos_token = '', 
 def format_prompt(prompt_text, start_token="", sep_token=""):
     return f"{start_token} {prompt_text} {sep_token}"
 
-def generate_responses(model_directory, prompt_text, args=create_training_args(), clean_result=True):
+def generate_responses(model_directory, prompt_text, args=create_training_args(), clean_result=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #print(f"Using device: {device}")
     model, tokenizer = load_model_and_tokenizer(model_directory)
