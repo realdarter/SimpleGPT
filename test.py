@@ -1,6 +1,5 @@
 from model_utils import *
-import re
-from tokenization import *
+
 
 if __name__ == "__main__":
     model_directory = 'checkpoint/lgbtqsave'  # Replace with your actual model directory
