@@ -1,10 +1,15 @@
+
 /goosenv/
 /env/
+
 /models/
 /checkpoint/
-cleaned.csv
-*.txt
 /model/
+
+cleaned.csv
 cleaned2.csv
+
+*.txt
+
 discord.py
 main.py
