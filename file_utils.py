@@ -35,7 +35,7 @@ def read_txt_file(file_path):
         lines = file.readlines()
     return [line.strip() for line in lines]
 
-def prepare_csv(csv_path, header=True, start_token="<[BOS]>", sep_token="<[SEP]>"):
+def prepare_csv(csv_path, header=True, start_token='', sep_token=''):
     """ 
     Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
     """
