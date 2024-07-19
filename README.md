@@ -99,6 +99,6 @@ print(f"Generated Response: {response}")
 
 
 
-```plaintext
+
 Fine-tuning GPT-2 involves preparing your dataset, configuring training parameters, and running the training script. The model will be saved for future use, and you can test it with new contexts to generate responses.
-```
+
