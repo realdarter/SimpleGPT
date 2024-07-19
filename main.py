@@ -47,7 +47,7 @@ if __name__ == "__main__":
         #if ((current_message is not None) and (current_message['timestamp'] != last_message_timestamp) and (current_message['content'] != '') and (current_message['username'] == "Beef Bot")):
         if ((current_message is not None) and (current_message['timestamp'] != last_message_timestamp) and (current_message['content'] != '') and (current_message['username'] != current_user)):
             print(f"Found New Message: {current_message['content']}")
-            trimmed_message = f"<[BOS]> {current_message['content'].strip()} <[SEP]>"
+            trimmed_message = f"{current_message['content'].strip()}"
             #trimmed_message = f"{current_message['content'].strip()}"
             try:
                 gen_response = generate_responses(model_path, trimmed_message, temperature=0.9, max_length=len(trimmed_message)+ 50, repetition_penalty=2.0)
