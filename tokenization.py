@@ -67,20 +67,18 @@ def tokenize_dataset(tokenizer, texts, max_length=512, eos_token="<[EOS]>"):
     return input_ids, attention_masks, labels
 
 
-def ensure_tokens(tokenizer, pad_token='<[PAD]>', sep_token='<[SEP]>', eos_token='<[EOS]>', bos_token='<[BOS]>'):
-    """
-    Adds special tokens to the tokenizer if they are not already present.
-    Args:
-        tokenizer (GPT2Tokenizer): The tokenizer to update.
-        pad_token (str, optional): The padding token. Defaults to '<[PAD]>'.
-        sep_token (str, optional): The separator token. Defaults to '<[SEP]>'.
-        eos_token (str, optional): The end-of-sequence token. Defaults to '<[EOS]>'.
-        bos_token (str, optional): The beginning-of-sequence token. Defaults to '<[BOS]>'.
-    """
-    tokenizer.add_special_tokens({'pad_token': pad_token})
-    tokenizer.add_special_tokens({'sep_token': sep_token})
-    tokenizer.add_special_tokens({'eos_token': eos_token})
-    tokenizer.add_special_tokens({'bos_token': bos_token})
+
+def ensure_tokens(model, tokenizer, pad_token='<[PAD]>', sep_token='<[SEP]>', eos_token='<[EOS]>', bos_token='<[BOS]>'):
+    # Create a dictionary of special tokens
+    special_tokens_dict = {
+        'pad_token': pad_token,
+        'sep_token': sep_token,
+        'eos_token': eos_token,
+        'bos_token': bos_token
+    }
+    tokenizer.add_special_tokens(special_tokens_dict)
+    
+    model.resize_token_embeddings(len(tokenizer))
 
 def decode_data(tokenizer, token_ids, skip_special_tokens=True):
     """
@@ -101,23 +99,3 @@ def decode_data(tokenizer, token_ids, skip_special_tokens=True):
     
     decoded_data = tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
     return decoded_data
-
-"""
-# Example usage:
-model_directory = 'checkpoint/run1'
-tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
-ensure_tokens(tokenizer)
-
-texts = "<[BOS]> Hello 🌍 [⎝oofShorts⎠✔ ᶦˢ ᵃ ⁿᵒᵒᵇ] Hi how are you <[SEP]> I am 😀 good Thanks!"
-
-input_ids, attention_masks, labels = tokenize_dataset(tokenizer, texts)
-print(input_ids)
-print(attention_masks)
-decoded_input = decode_data(tokenizer, input_ids[0].tolist(), skip_special_tokens=False)
-print("Decoded Input IDS:", decoded_input)
-
-decoded_labels = decode_data(tokenizer, labels[0].tolist(), skip_special_tokens=False)
-print(len(decoded_labels))
-print("Decoded Input IDS:", decoded_labels)
-
-"""

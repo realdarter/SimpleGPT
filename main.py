@@ -51,7 +51,7 @@ if __name__ == "__main__":
             #trimmed_message = f"{current_message['content'].strip()}"
             try:
                 gen_response = generate_responses(model_path, trimmed_message, temperature=0.9, max_length=len(trimmed_message)+ 50, repetition_penalty=2.0)
-                filtered_message = replace_placeholders(gen_response[1], current_message['referenced_author_id'])
+                filtered_message = replace_placeholders(gen_response, current_message['referenced_author_id'])
                 send_message(read_token(), channel_id, message="*[Dartiros AI]:* " + filtered_message, reply_to=current_message['message_id'])
                 #send_message(read_token(), channel_id, message=filtered_message, reply_to=current_message['message_id'])
                 last_message_timestamp = current_message['timestamp']

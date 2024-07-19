@@ -4,13 +4,23 @@ import os
 CUDA_LAUNCH_BLOCKING=1
 
 if __name__ == "__main__":
-    model_path = 'checkpoint/lgbtqsave2'
+    model_path = 'checkpoint/delete'
     #model_path = 'checkpoint/reddit'
     csv_path = os.path.join(model_path, 'cleaned.csv')
 
     # Prepare the CSV data
-    encoded_data = prepare_csv(csv_path)
+    args = create_training_args(
+        num_epochs=3,
+        batch_size=8,
+        learning_rate=3e-5,
+        save_every=1000,
+        max_length=512,
+        temperature=0.8,
+        top_k=60,
+        top_p=0.92,
+        repetition_penalty=1.2
+    )
 
     # Train the model
-    train_model(model_path, encoded_data, num_epochs=3, batch_size=4, save_every=500)
+    train_model(model_path, csv_path, args)
 
