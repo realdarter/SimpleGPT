@@ -53,14 +53,14 @@ Run the script to start training. GPU acceleration will be used to speed up the 
 # Example Code for Training and Testing:
 # Train
 ```python
-from model_utils import *
+from chat_gen import *
 import os
 
 model_path = 'checkpoint/cleaned.csv'
 csv_path = os.path.join(model_path, 'cleaned.csv')
 
 # Prepare the CSV data
-args = create_training_args(
+args = create_args(
   num_epochs=3,
   batch_size=4,
   learning_rate=3e-5,
@@ -73,12 +73,12 @@ train_model(model_path, csv_path, args)
 # Test
 
 ```python
-from model_utils import *
+from chat_gen import *
 model_directory = 'checkpoint/cleaned.csv'  # Replace with your actual model directory
 
 prompt_text = input("Input: ")
 
-args = create_training_args(
+args = create_args(
    max_length=512,
    temperature=0.8,
    top_k=60,
