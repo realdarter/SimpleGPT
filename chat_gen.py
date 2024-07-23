@@ -1,10 +1,13 @@
+"""
+Coded By Goose 🪿
+"""
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
-from tokenization import *  
-from file_utils import *
 import time
 from collections import deque
+import os
+import csv
 
 CUDA_LAUNCH_BLOCKING=1
 
@@ -24,8 +27,187 @@ class CustomDataset(Dataset):
             'labels': self.labels[idx]
         }
 
+
+def ensure_file_exists(file_path, create_if_missing=True):
+    """
+    Ensures the directory for the specified file path exists. 
+    If the file does not exist, creates the necessary directories and an empty file if create_if_missing is True.
+    Args:
+    - file_path (str): The path of the file to check or create.
+    - create_if_missing (bool): Whether to create the file if it does not exist. Defaults to True.
+    Returns: bool: True if the file already exists or was successfully created, False if there was an error.
+    """
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+    if os.path.isfile(file_path):
+        return True
+    
+    if create_if_missing:
+        try:
+            with open(file_path, 'w', encoding='utf-8'):
+                pass
+            return True
+        except IOError:
+            print(f"Error: Could not create file {file_path}")
+            return False
+    else:
+        return False
+
+def prepare_csv(csv_path, header=True, start_token='', sep_token=''):
+    """ 
+    Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
+    Args:
+        csv_path (str): The path to the CSV file to read.
+        header (bool, optional): Whether the CSV file includes a header row. Defaults to True.
+        start_token (str, optional): A token to prepend to each row's content. Defaults to ''.
+        sep_token (str, optional): A token to insert between items in a row. Defaults to ''.
+    Returns: list: A list of formatted strings, each representing a row from the CSV file.
+    """
+    all_items = []
+    
+    with open(csv_path, 'r', encoding='utf-8', errors='ignore') as f:
+        reader = csv.reader(f)
+        if header:
+            next(reader)
+        for row in reader:
+            stripped_row = [item.strip().replace('"', '') for item in row]
+            encoded_row = f"{start_token} " + f" {sep_token} ".join(stripped_row)
+            #print(encoded_row)
+            all_items.append(encoded_row.strip())
+    return all_items
+
+def check_gpt2_models_exist(model_path):
+    """
+    Checks if all necessary files for a GPT-2 model exist in the specified directory.
+    Args: model_path (str): The path to the directory containing model files.
+    
+    Returns: bool: True if all required files exist, False if any file is missing.
+    """
+    model_files = [
+        'config.json',
+        'generation_config.json',
+        'merges.txt',
+        'model.safetensors',
+        'special_tokens_map.json',
+        'tokenizer_config.json',
+        'vocab.json'
+    ]
+    all_files_exist = True
+    for file in model_files:
+        file_path = os.path.join(model_path, file)
+        absolute_path = os.path.abspath(file_path)  # Get the absolute path
+        if not os.path.isfile(absolute_path):
+            print(f"File missing: {absolute_path}")
+            all_files_exist = False
+    return all_files_exist
+
+def tokenize_single_text(tokenizer, text, max_length=512):
+    """
+    Tokenizes a single line of text and ensures it is padded or truncated to a maximum length.
+    Returns a dictionary with 'input_ids' and 'attention_mask'.
+    
+    Args:
+        tokenizer (GPT2Tokenizer): The tokenizer to use.
+        text (str): The text to tokenize.
+        max_length (int, optional): The maximum length of the tokenized sequence. Defaults to 512.
+
+    Returns:
+        dict: A dictionary containing 'input_ids' and 'attention_mask'.
+    """
+    encoded_text = tokenizer.encode_plus(
+        text.strip(), 
+        add_special_tokens=True, 
+        max_length=max_length, 
+        truncation=True, 
+        padding='max_length', 
+        return_tensors='pt'
+    )
+    return {
+        'input_ids': encoded_text['input_ids'],
+        'attention_mask': encoded_text['attention_mask']
+    }
+
+def tokenize_dataset(tokenizer, texts, max_length=512, eos_token="<[EOS]>"):
+    """
+    Tokenizes a list of texts and ensures each text is padded or truncated to a maximum length.
+    Returns input_ids, attention_masks, and labels.
+    
+    Args:
+        tokenizer (GPT2Tokenizer): The tokenizer to use.
+        texts (list of str or str): The texts to tokenize.
+        max_length (int, optional): The maximum length of the tokenized sequences. Defaults to 512.
+        eos_token (str, optional): The end-of-sequence token. Defaults to "<[EOS]>".
+
+    Returns:
+        tuple: A tuple containing:
+            - input_ids (torch.Tensor): Tensor of token IDs.
+            - attention_masks (torch.Tensor): Tensor of attention masks.
+            - labels (torch.Tensor): Tensor of labels for language modeling.
+    """
+    if isinstance(texts, str):
+        texts = [texts]
+        
+    tokenized_texts = [tokenizer.encode_plus(text, max_length=max_length, truncation=True, padding='max_length') for text in texts]
+    
+    input_ids = torch.tensor([item['input_ids'] for item in tokenized_texts], dtype=torch.long)
+    attention_masks = torch.tensor([item['attention_mask'] for item in tokenized_texts], dtype=torch.long)
+    
+    eos_ids = tokenizer.convert_tokens_to_ids(eos_token)
+    eos_tensor = torch.full((input_ids.size(0), 1), eos_ids, dtype=torch.long)
+    input_ids = torch.cat([input_ids, eos_tensor], dim=1)
+    
+    attention_masks = torch.cat([attention_masks, torch.ones((attention_masks.size(0), 1), dtype=torch.long)], dim=1)
+    
+    labels = input_ids.clone()
+    
+    return input_ids, attention_masks, labels
+
+
+
+def ensure_tokens(model, tokenizer, pad_token='<[PAD]>', sep_token='<[SEP]>', eos_token='<[EOS]>', bos_token='<[BOS]>'):
+    """
+    Adds special tokens to the tokenizer and adjusts the model's token embeddings to account for these tokens.
+    Args:
+        model: The model object (e.g., a Hugging Face Transformers model) that needs its token embeddings resized.
+        tokenizer: The tokenizer object (e.g., a Hugging Face Transformers tokenizer) to which special tokens will be added.
+        pad_token (str, optional): The token used for padding sequences. Defaults to '<[PAD]>'.
+        sep_token (str, optional): The token used to separate sequences. Defaults to '<[SEP]>'.
+        eos_token (str, optional): The token used to indicate the end of a sequence. Defaults to '<[EOS]>'.
+        bos_token (str, optional): The token used to indicate the beginning of a sequence. Defaults to '<[BOS]>'.
+    Returns: None
+    """
+    special_tokens_dict = {
+        'pad_token': pad_token,
+        'sep_token': sep_token,
+        'eos_token': eos_token,
+        'bos_token': bos_token
+    }
+    tokenizer.add_special_tokens(special_tokens_dict)
+    
+    model.resize_token_embeddings(len(tokenizer))
+
+def decode_data(tokenizer, token_ids, skip_special_tokens=True):
+    """
+    Decodes a list or tensor of token IDs back into a string.
+    
+    Args:
+        tokenizer (GPT2Tokenizer): The tokenizer to use.
+        token_ids (list of int or torch.Tensor): The token IDs to decode.
+        skip_special_tokens (bool, optional): Whether to skip special tokens. Defaults to True.
+
+    Returns:
+        str: The decoded string.
+    """
+    if isinstance(token_ids, torch.Tensor):
+        token_ids = token_ids.tolist()
+    elif not isinstance(token_ids, list):
+        raise ValueError("token_ids should be a list or a tensor of integers.")
+    
+    decoded_data = tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
+    return decoded_data
+
 # Function to create training arguments
-def create_training_args(num_epochs=1, batch_size=1, learning_rate=5e-5, save_every=500, 
+def create_args(num_epochs=1, batch_size=1, learning_rate=5e-5, save_every=500, 
                            max_length=512, temperature=0.7, top_k=50, top_p=0.95, repetition_penalty=1.2):
     """
     Returns a dictionary of training arguments.
@@ -54,6 +236,7 @@ def create_training_args(num_epochs=1, batch_size=1, learning_rate=5e-5, save_ev
         "top_p": top_p,
         "repetition_penalty": repetition_penalty
     }
+
 
 
 def load_model_and_tokenizer(model_directory):

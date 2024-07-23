@@ -19,7 +19,7 @@ def replace_placeholders(text, userID):
     text = re.sub(pattern_user, f'<@{userID}>', text)
 
     # Replace placeholders with specific values
-    text = re.sub(pattern_profanity, '||[Redacted]||', text)
+    text = re.sub(pattern_profanity, '||[DICK]||', text)
     text = re.sub(pattern_email, 'dartiros.cc@gmail.com', text)
     text = re.sub(pattern_discord, 'https://discord.gg/bugcat', text)
     text = re.sub(pattern_link, 'https://www.walmart.com/browse/personal-care/dildos/1005862_1414629_4054919_1811332', text)
@@ -28,8 +28,8 @@ def replace_placeholders(text, userID):
     return text
 
 if __name__ == "__main__":
-    model_path = 'checkpoint/lgbtqsave'
-    channel_id = '1180990073433505892'
+    model_path = 'checkpoint/run1'
+    channel_id = '898689047550132276'
     
     global last_message_timestamp
     last_message_timestamp = 0
@@ -50,7 +50,18 @@ if __name__ == "__main__":
             trimmed_message = f"{current_message['content'].strip()}"
             #trimmed_message = f"{current_message['content'].strip()}"
             try:
-                gen_response = generate_responses(model_path, trimmed_message, temperature=0.9, max_length=len(trimmed_message)+ 50, repetition_penalty=2.0)
+                args = create_training_args(
+                    num_epochs=3,
+                    batch_size=4,
+                    learning_rate=3e-5,
+                    save_every=1000,
+                    max_length=512,
+                    temperature=0.8,
+                    top_k=60,
+                    top_p=0.92,
+                    repetition_penalty=1.2
+                )
+                gen_response = generate_responses(model_path, trimmed_message, args=args, clean_result=True)
                 filtered_message = replace_placeholders(gen_response, current_message['referenced_author_id'])
                 send_message(read_token(), channel_id, message="*[Dartiros AI]:* " + filtered_message, reply_to=current_message['message_id'])
                 #send_message(read_token(), channel_id, message=filtered_message, reply_to=current_message['message_id'])

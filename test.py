@@ -1,14 +1,14 @@
-from model_utils import *
+from chat_gen import *
 
 
 if __name__ == "__main__":
-    model_directory = 'checkpoint/lgbtqsave'  # Replace with your actual model directory
+    model_directory = 'checkpoint/run1'  # Replace with your actual model directory
     while True:
         prompt_text = input("Input: ")
 
-        args = create_training_args(
+        args = create_args(
             num_epochs=3,
-            batch_size=8,
+            batch_size=4,
             learning_rate=3e-5,
             save_every=1000,
             max_length=512,

@@ -1,15 +1,15 @@
-from model_utils import *
+from chat_gen import *
 import os
 
 if __name__ == "__main__":
-    model_path = 'checkpoint/delete'
+    model_path = 'checkpoint/run1'
     #model_path = 'checkpoint/reddit'
     csv_path = os.path.join(model_path, 'cleaned.csv')
 
     # Prepare the CSV data
-    args = create_training_args(
+    args = create_args(
         num_epochs=3,
-        batch_size=8,
+        batch_size=4,
         learning_rate=3e-5,
         save_every=1000,
         max_length=512,
