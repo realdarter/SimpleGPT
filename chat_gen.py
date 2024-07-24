@@ -290,7 +290,7 @@ def __print_training_progress__(epoch, num_epochs, i, len_dataloader, loss, avg_
 
     print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i}/{len_dataloader}], Loss: {loss:.4f}, Avg Loss: {avg_loss:.4f}, Elapsed Time: {elapsed_time:.2f} seconds, Estimated Time Remaining: {estimated_time_remaining:.2f} seconds")
 
-def train_model(model_directory=None, csv_path=None, args=create_training_args()):
+def train_model(model_directory=None, csv_path=None, args=create_args()):
     """
     Train the GPT-2 model on a custom dataset of context-response pairs.
 
@@ -417,7 +417,7 @@ def clean_text(uncleaned_text,  pad_token = '', sep_token = '', eos_token = '', 
 def format_prompt(prompt_text, start_token="", sep_token=""):
     return f"{start_token} {prompt_text} {sep_token}"
 
-def generate_responses(model_directory, prompt_text, args=create_training_args(), clean_result=False):
+def generate_responses(model_directory, prompt_text, args=create_args(), clean_result=False):
     """
     Generate a response from the model given a prompt.
     Args:
