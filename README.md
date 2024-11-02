@@ -56,8 +56,9 @@ Run the script to start training. GPU acceleration will be used to speed up the 
 from chat_gen import *
 import os
 
-model_path = 'checkpoint/cleaned.csv'
-csv_path = os.path.join(model_path, 'cleaned.csv')
+model_directory = 'checkpoint/cleaned.csv'
+#csv_path is directory to data csv
+csv_path = os.path.join(model_directory, 'cleaned.csv')
 
 # Prepare the CSV data
 args = create_args(
@@ -67,16 +68,16 @@ args = create_args(
   save_every=1000,
   max_length=512,
 )
-train_model(model_path, csv_path, args)
+train_model(model_directory, csv_path, args)
 ```
 
 # Test
 
 ```python
 from chat_gen import *
-model_directory = 'checkpoint/cleaned.csv'  # Replace with your actual model directory
 
-prompt_text = input("Input: ")
+model_directory = 'checkpoint/run1'  # Replace with your actual model directory
+model, tokenizer = load_model_and_tokenizer(model_directory)
 
 args = create_args(
    max_length=512,
@@ -85,7 +86,9 @@ args = create_args(
    top_p=0.92,
    repetition_penalty=1.2
 )
-response = generate_responses(model_directory, prompt_text, args=args, clean_result=True)
+
+prompt_text = input("Input: ")
+response = generate_responses(model, tokenizer, prompt_text, args=args, clean_result=True)
 
 print(f"Prompt: {prompt_text}")
 print(f"Generated Response: {response}")
