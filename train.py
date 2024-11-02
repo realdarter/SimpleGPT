@@ -2,9 +2,9 @@ from chat_gen import *
 import os
 
 if __name__ == "__main__":
-    model_path = 'checkpoint/run1'
+    model_directory = 'checkpoint/run1'
     #model_path = 'checkpoint/reddit'
-    csv_path = os.path.join(model_path, 'cleaned.csv')
+    csv_path = os.path.join(model_directory, 'cleaned.csv')
 
     # Prepare the CSV data
     args = create_args(
@@ -20,5 +20,5 @@ if __name__ == "__main__":
     )
 
     # Train the model
-    train_model(model_path, csv_path, args)
+    train_model(model_directory, csv_path, args)
 

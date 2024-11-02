@@ -7,7 +7,7 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import time
 from collections import deque
 import os
-import csv
+import pandas as pd
 
 CUDA_LAUNCH_BLOCKING=1
 
@@ -56,25 +56,31 @@ def ensure_file_exists(file_path, create_if_missing=True):
 def prepare_csv(csv_path, header=True, start_token='', sep_token=''):
     """ 
     Reads a CSV file and returns a list of all items with optional start, separator, and end tokens.
+    
     Args:
         csv_path (str): The path to the CSV file to read.
         header (bool, optional): Whether the CSV file includes a header row. Defaults to True.
         start_token (str, optional): A token to prepend to each row's content. Defaults to ''.
         sep_token (str, optional): A token to insert between items in a row. Defaults to ''.
-    Returns: list: A list of formatted strings, each representing a row from the CSV file.
-    """
-    all_items = []
     
-    with open(csv_path, 'r', encoding='utf-8', errors='ignore') as f:
-        reader = csv.reader(f)
-        if header:
-            next(reader)
-        for row in reader:
-            stripped_row = [item.strip().replace('"', '') for item in row]
-            encoded_row = f"{start_token} " + f" {sep_token} ".join(stripped_row)
-            #print(encoded_row)
-            all_items.append(encoded_row.strip())
+    Returns: 
+        list: A list of formatted strings, each representing a row from the CSV file.
+    """
+    start_time = time.time()
+    if header:
+        df = pd.read_csv(csv_path, dtype=str)
+    else:
+        df = pd.read_csv(csv_path, header=None, dtype=str)
+
+    # Drop NaNs and replace directly
+    formatted_rows = df.fillna('').apply(lambda row: f"{start_token} " + f" {sep_token} ".join(row.str.strip().str.replace('"', '')), axis=1)
+    all_items = formatted_rows.tolist()
+
+    elapsed_time = time.time() - start_time
+    print(f"Time taken to prepare CSV: {elapsed_time:.4f} seconds")
+    print(formatted_rows[0])
     return all_items
+
 
 def check_gpt2_models_exist(model_path):
     """
@@ -240,15 +246,12 @@ def create_args(num_epochs=1, batch_size=1, learning_rate=5e-5, save_every=500,
 
 
 def load_model_and_tokenizer(model_directory):
-    """
-    Load the pre-trained GPT-2 model and tokenizer from a specified directory.
-    Args: model_directory (str): Directory containing the pre-trained model and tokenizer.
-    Returns: tuple: A tuple containing the model and tokenizer.
-    """
+    start_time = time.time()
     model = GPT2LMHeadModel.from_pretrained(model_directory)
     tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
     model.resize_token_embeddings(len(tokenizer))
-
+    end_time = time.time()
+    print(f"Model loaded in {end_time - start_time:.2f} seconds.")
     return model, tokenizer
 
 def download_gpt2_124M(save_directory):
@@ -290,7 +293,7 @@ def __print_training_progress__(epoch, num_epochs, i, len_dataloader, loss, avg_
 
     print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i}/{len_dataloader}], Loss: {loss:.4f}, Avg Loss: {avg_loss:.4f}, Elapsed Time: {elapsed_time:.2f} seconds, Estimated Time Remaining: {estimated_time_remaining:.2f} seconds")
 
-def train_model(model_directory=None, csv_path=None, args=create_args()):
+def train_model(model_directory=None, csv_directory=None, args=create_args()):
     """
     Train the GPT-2 model on a custom dataset of context-response pairs.
 
@@ -300,16 +303,19 @@ def train_model(model_directory=None, csv_path=None, args=create_args()):
         args (dict, optional): Dictionary of training arguments.
     """
 
-    if model_directory is None:
-        print("No given Model Directory")
-        return
-    if csv_path is None:
+
+    if csv_directory is None:
         print("No given CSV Path")
+        return
+    if model_directory is None:
+        print("No Model Path")
         return
     if args is None:
         print("Error with Training Args")
         return
     
+    model, tokenizer = load_model_and_tokenizer(model_directory)
+
     num_epochs = args.get('num_epochs')
     batch_size = args.get('batch_size')
     save_every = args.get('save_every')
@@ -317,16 +323,18 @@ def train_model(model_directory=None, csv_path=None, args=create_args()):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    download_gpt2_124M(model_directory)
+    #if (not check_gpt2_models_exist(model_directory)):
+    #    download_gpt2_124M(model_directory)
 
-    model, tokenizer = load_model_and_tokenizer(model_directory)
+    #model, tokenizer = load_model_and_tokenizer(model_directory)
 
     ensure_tokens(model, tokenizer)
     model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-5)
     scaler = torch.cuda.amp.GradScaler()
-    encoded_data = prepare_csv(csv_path,start_token=tokenizer.eos_token, sep_token=tokenizer.sep_token)
+
+    encoded_data = prepare_csv(csv_directory,start_token=tokenizer.eos_token, sep_token=tokenizer.sep_token)
 
     input_ids, attention_masks, labels = tokenize_dataset(tokenizer, encoded_data)
     dataset = CustomDataset(input_ids, attention_masks, labels)
@@ -417,7 +425,7 @@ def clean_text(uncleaned_text,  pad_token = '', sep_token = '', eos_token = '', 
 def format_prompt(prompt_text, start_token="", sep_token=""):
     return f"{start_token} {prompt_text} {sep_token}"
 
-def generate_responses(model_directory, prompt_text, args=create_args(), clean_result=False):
+def generate_responses(model, tokenizer, prompt_text, args=create_args(), clean_result=False):
     """
     Generate a response from the model given a prompt.
     Args:
@@ -434,7 +442,6 @@ def generate_responses(model_directory, prompt_text, args=create_args(), clean_r
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #print(f"Using device: {device}")
-    model, tokenizer = load_model_and_tokenizer(model_directory)
     ensure_tokens(model, tokenizer)
     model.to(device)
 
