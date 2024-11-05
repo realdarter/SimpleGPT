@@ -24,7 +24,7 @@ Fine-tune a pre-trained GPT-2 model to generate contextually coherent responses 
    ```
    Preferably install torch using NVIDIA GPU
    ```bash
-   pip install torch==x.x.x+cu121 -f https://download.pytorch.org/whl/torch_stable.html
+   https://pytorch.org/get-started/locally/ to get a install for GPU
    ```
 
 2. **Prepare Dataset**:
