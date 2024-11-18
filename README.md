@@ -22,10 +22,8 @@ Fine-tune a pre-trained GPT-2 model to generate contextually coherent responses 
    pip install transformers
    pip install pandas
    ```
-   Preferably install torch using NVIDIA GPU to get a install for GPU
-   ```bash
-   https://pytorch.org/get-started/locally/ 
-   ```
+   - Preferably install torch using NVIDIA GPU for accelerated training.  
+     [Get GPU-enabled PyTorch](https://pytorch.org/get-started/locally/)
 
 2. **Prepare Dataset**:
    Create a dataset of context-response pairs for fine-tuning.
