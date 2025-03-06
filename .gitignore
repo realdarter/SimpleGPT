@@ -1,21 +1,18 @@
-
+# Virtual environment directories
 /goosenv/
 /env/
 
-/models/
-/checkpoint/
-/model/
+# Model and checkpoint directories (likely containing large files)
+models/
+checkpoint/
+model/
 
+# Generated CSV data files
 cleaned.csv
 cleaned2.csv
 lgbtq.csv
-
-*.txt
-
-discord.py
-main.py
-runclean.py
 cleaned_darter.csv
-cleaned.csv
+
+# Ignore all plain text files
+*.txt
 test.py
-train.py
