@@ -8,7 +8,7 @@ if __name__ == "__main__":
 
     # Prepare the CSV data
     args = create_args(
-        num_epochs=2,
+        num_epochs=8,
         batch_size=4,
         learning_rate=3e-5,
         save_every=1000,
