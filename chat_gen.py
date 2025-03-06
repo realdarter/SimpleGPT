@@ -247,8 +247,11 @@ def create_args(num_epochs=1, batch_size=1, learning_rate=5e-5, save_every=500,
 
 
 
-def load_model_and_tokenizer(model_directory):
+def load_model_and_tokenizer(model_directory, download=True):
     start_time = time.time()
+    if (not check_gpt2_models_exist(model_directory) and download):
+        download_gpt2_124M(model_directory)
+    print(model_directory)
     model = GPT2LMHeadModel.from_pretrained(model_directory)
     tokenizer = GPT2Tokenizer.from_pretrained(model_directory)
     model.resize_token_embeddings(len(tokenizer))
@@ -325,8 +328,6 @@ def train_model(model_directory=None, csv_directory=None, args=create_args()):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    #if (not check_gpt2_models_exist(model_directory)):
-    #    download_gpt2_124M(model_directory)
 
     #model, tokenizer = load_model_and_tokenizer(model_directory)
 
