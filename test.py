@@ -9,6 +9,7 @@ if __name__ == "__main__":
             #batch_size=4,
             #learning_rate=3e-5,
             #save_every=1000,
+            #enableSampleMode=False,
             max_length=512,
             temperature=0.8,
             top_k=60,

@@ -16,7 +16,8 @@ if __name__ == "__main__":
         temperature=0.8,
         top_k=60,
         top_p=0.92,
-        repetition_penalty=1.2
+        repetition_penalty=1.2,
+        enableSampleMode=True
     )
 
     # Train the model
