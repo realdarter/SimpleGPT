@@ -82,10 +82,7 @@ def main():
     cuda_version = check_cuda_version()
     if cuda_version:
         print(f"Detected CUDA version: {cuda_version}")
-        print(f"To attempt to use GPU, please uninstall the current PyTorch version by running: pip uninstall torch")
-        latest_version = "x.x.x"
-        print("Replace x.x.x with the latest or compatible version for your CUDA version.")
-        print(f"Install it like this: pip install torch=={latest_version}+cu{cuda_version.replace('.', '')} -f https://download.pytorch.org/whl/torch_stable.html")
+        print(f"Please uninstall the current torch version and install the correct version for CUDA {cuda_version}. Using this link: https://pytorch.org/get-started/locally/")
     else:
         print("CUDA is not installed or nvcc command not found.")
     

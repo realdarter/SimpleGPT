@@ -81,6 +81,39 @@ def prepare_csv(csv_path, header=True, start_token='', sep_token=''):
     print(formatted_rows[0])
     return all_items
 
+def create_args(num_epochs=1, batch_size=32, learning_rate=1e-5, save_every=500, max_length=256, temperature=1.0, top_k=5, top_p=0.9, repetition_penalty=1.0):
+    """
+    Returns a dictionary of training and evaluation arguments.
+    
+    Args:
+        num_epochs (int, optional): Number of epochs. Defaults to 1.
+        batch_size (int, optional): Batch size. Defaults to 32.
+        learning_rate (float, optional): Learning rate. Defaults to 1e-5.
+        save_every (int, optional): Save model every X steps. Defaults to 500.
+        max_length (int, optional): Maximum sequence length. Defaults to 256.
+        temperature (float, optional): Sampling temperature for predictions. Defaults to 1.0.
+        top_k (int, optional): Number of top predictions to consider. Defaults to 5.
+        top_p (float, optional): Cumulative probability for nucleus sampling. Defaults to 0.9.
+        repetition_penalty (float, optional): Penalty for repeated phrases. Defaults to 1.0.
+        data_dir (str, optional): Path to the dataset directory. Defaults to 'data/garbage_classification'.
+        model_dir (str, optional): Directory to save the model. Defaults to 'saved_models'.
+        test_image_path (str, optional): Path to test image for prediction. Defaults to None.
+
+    Returns:
+        dict: Dictionary containing training and evaluation arguments.
+    """
+    return {
+        "num_epochs": num_epochs,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "save_every": save_every,
+        "max_length": max_length,
+        "temperature": temperature,
+        "top_k": top_k,
+        "top_p": top_p,
+        "repetition_penalty": repetition_penalty,
+    }
+
 
 def check_gpt2_models_exist(model_path):
     """
@@ -211,39 +244,6 @@ def decode_data(tokenizer, token_ids, skip_special_tokens=True):
     
     decoded_data = tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
     return decoded_data
-
-# Function to create training arguments
-def create_args(num_epochs=1, batch_size=1, learning_rate=5e-5, save_every=500, 
-                           max_length=512, temperature=0.7, top_k=50, top_p=0.95, repetition_penalty=1.2):
-    """
-    Returns a dictionary of training arguments.
-    Args:
-        num_epochs (int, optional): Number of epochs. Defaults to 1.
-        batch_size (int, optional): Batch size. Defaults to 1.
-        learning_rate (float, optional): Learning rate. Defaults to 5e-5.
-        save_every (int, optional): Save model every X steps. Defaults to 500.
-        max_length (int, optional): Maximum length of generated sequences. Defaults to 512.
-        temperature (float, optional): Sampling temperature. Defaults to 0.7.
-        top_k (int, optional): Top-K sampling. Defaults to 50.
-        top_p (float, optional): Top-P (nucleus) sampling. Defaults to 0.95.
-        repetition_penalty (float, optional): Repetition penalty. Defaults to 1.2.
-
-    Returns:
-        dict: Dictionary containing training arguments.
-    """
-    return {
-        "num_epochs": num_epochs,
-        "batch_size": batch_size,
-        "learning_rate": learning_rate,
-        "save_every": save_every,
-        "max_length": max_length,
-        "temperature": temperature,
-        "top_k": top_k,
-        "top_p": top_p,
-        "repetition_penalty": repetition_penalty
-    }
-
-
 
 def load_model_and_tokenizer(model_directory):
     start_time = time.time()
