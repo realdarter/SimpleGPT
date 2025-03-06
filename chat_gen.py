@@ -17,10 +17,13 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import torch
+print(torch.__version__)
 from torch import nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
+
 
 #                        GLOBALS & HEADERS
 
@@ -85,7 +88,7 @@ def prepare_csv(csv_path: str, header: bool = True, start_token: str = "", sep_t
     )
     elapsed_time = time.time() - start_time
     print(f"Time taken to prepare CSV: {elapsed_time:.4f} seconds")
-    print(f"First row example: {formatted_rows.iloc[0]}")
+    #print(f"First row example: {formatted_rows.iloc[0]}")
     return formatted_rows.tolist()
 
 
@@ -154,11 +157,10 @@ def tokenize_dataset(tokenizer: GPT2Tokenizer, texts: Union[List[str], str],
     labels = input_ids.clone()
 
     # TEMP CODE BELOW
-    decoded_text = tokenizer.decode(input_ids[0].tolist(), skip_special_tokens=False)
-    print("Decoded text from the first tokenized sequence:")
-    print(decoded_text)
+    #decoded_text = tokenizer.decode(input_ids[0].tolist(), skip_special_tokens=False)
+    #print("Decoded text from the first tokenized sequence:")
+    #print(decoded_text)
     # TEMP CODE ABOVE
-
     return input_ids, attention_masks, labels
 
 
@@ -235,7 +237,8 @@ def create_args(num_epochs: int = 1, batch_size: int = 1, learning_rate: float =
         "temperature": temperature,
         "top_k": top_k,
         "top_p": top_p,
-        "repetition_penalty": repetition_penalty
+        "repetition_penalty": repetition_penalty,
+        "enableSampleMode": False
     }
 
 
@@ -274,7 +277,9 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     model.to(device)
 
     optimizer = Adam(model.parameters(), lr=args.get("learning_rate", 5e-5))
-    scaler = torch.amp.GradScaler(device_type='cuda', mean_resizing=False)
+    scaler = torch.amp.GradScaler()
+
+
 
     # Prepare dataset
     encoded_data = prepare_csv(csv_path, start_token=tokenizer.bos_token, sep_token=tokenizer.sep_token)
@@ -316,6 +321,10 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
             if step % args["save_every"] == 0:
                 model.save_pretrained(model_directory)
                 print(f"Model saved at step {step} in epoch {epoch+1}")
+                if args["enableSampleMode"]:
+                    sample_dialogue = random.choice(encoded_data)
+                print("Example dialogue from CSV:")
+                print(sample_dialogue)
 
         avg_epoch_loss = epoch_loss / len(dataloader)
         print(f"Epoch {epoch+1} completed. Average Loss: {avg_epoch_loss:.4f}")
