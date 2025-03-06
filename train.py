@@ -2,13 +2,13 @@ from chat_gen import *
 import os
 
 if __name__ == "__main__":
-    model_directory = 'checkpoint/run2'
+    model_directory = 'checkpoint/run3'
     #model_path = 'checkpoint/reddit'
     csv_path = os.path.join(model_directory, 'cleaned.csv')
 
     # Prepare the CSV data
     args = create_args(
-        num_epochs=8,
+        num_epochs=10,
         batch_size=4,
         learning_rate=3e-5,
         save_every=1000,
