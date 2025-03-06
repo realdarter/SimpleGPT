@@ -321,10 +321,14 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
             if step % args["save_every"] == 0:
                 model.save_pretrained(model_directory)
                 print(f"Model saved at step {step} in epoch {epoch+1}")
-                if args["enableSampleMode"]:
-                    sample_dialogue = random.choice(encoded_data)
-                print("Example dialogue from CSV:")
-                print(sample_dialogue)
+                if args.get("enableSampleMode", False):
+                    # Select a random prompt from the dataset
+                    sample_prompts = ["Hello, how are you?", "What's your name?", "Tell me a joke."]
+                    sample_prompt = random.choice(sample_prompts)
+                    print("Example dialogue from CSV:")
+                    print(f"Prompt: {sample_prompt}")
+                    response = generate_responses(model, tokenizer, sample_prompt, args=args, clean_result=True)
+                    print(f"Generated Response: {response}")
 
         avg_epoch_loss = epoch_loss / len(dataloader)
         print(f"Epoch {epoch+1} completed. Average Loss: {avg_epoch_loss:.4f}")
