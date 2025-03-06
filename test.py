@@ -3,7 +3,7 @@ from chat_gen import *
 
 if __name__ == "__main__":
     model_directory = 'checkpoint/run2'  # Replace with your actual model directory
-    model, tokenizer = load_model_and_tokenizer(model_directory)
+    model, tokenizer = load_model_and_tokenizer(model_directory, download=False)
     args = create_args(
             #num_epochs=3,
             #batch_size=4,
