@@ -5,14 +5,14 @@ Fine-tune Microsoft Phi-2 (2.7B) with LoRA to generate conversational responses 
 ## Requirements
 - Python 3.8+
 - NVIDIA GPU recommended (works on CPU but much slower)
-- Packages: `torch transformers peft pandas requests`
+- Packages: `torch transformers peft pandas`
 
 ## Setup
 
 ```bash
 git clone https://github.com/realdarter/SimpleGPT
 cd SimpleGPT
-pip install torch transformers peft pandas requests
+pip install torch transformers peft pandas
 ```
 
 Preferably install PyTorch with CUDA support: [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/)
@@ -80,12 +80,6 @@ Or just run `python test.py`.
 ## Data Cleaning
 
 Run `python runclean.py` for an interactive CSV cleaner that lets you review and delete bad training pairs.
-
-## Discord Bot
-
-1. Put your Discord token in `token.txt`
-2. Update the `channel_id` in `main.py`
-3. Run `python main.py`
 
 ## Architecture
 
