@@ -111,7 +111,7 @@ def prepare_csv(csv_path: str, header: bool = True, start_token: str = "", sep_t
     for chunk in pd.read_csv(csv_path, header=0 if header else None, dtype=str, chunksize=chunk_size):
         chunk.fillna('', inplace=True)
         rows = chunk.apply(
-            lambda row: f"{start_token} " + f" {sep_token} ".join(row.astype(str).str.strip().str.replace('"', '')),
+            lambda row: f"{start_token} " + f" {sep_token} ".join(row.astype(str).str.strip()),
             axis=1
         )
         formatted_rows.extend(rows.tolist())
@@ -308,6 +308,9 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
 
     # Prepare dataset (lazy tokenization — doesn't load everything into RAM)
     encoded_data = prepare_csv(csv_path, start_token=tokenizer.bos_token, sep_token=tokenizer.sep_token)
+    if len(encoded_data) == 0:
+        print("Error: CSV is empty or has no valid rows. Nothing to train on.")
+        return
     dataset = LazyTokenDataset(
         encoded_data, tokenizer, max_length=args["max_length"],
         sep_token=SPECIAL_TOKENS["sep_token"],
@@ -323,7 +326,6 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
 
     # Resume from checkpoint if training_state.pt exists
     start_epoch = 0
-    start_step = 0
     training_state_path = os.path.join(model_directory, "training_state.pt")
     if os.path.isfile(training_state_path):
         print("Resuming from training checkpoint...")
@@ -333,8 +335,11 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
         if scaler is not None and 'scaler' in state:
             scaler.load_state_dict(state['scaler'])
         start_epoch = state.get('epoch', 0)
-        start_step = state.get('step', 0)
-        print(f"Resumed from epoch {start_epoch}, step {start_step}")
+        if 'rng_state' in state:
+            torch.set_rng_state(state['rng_state'])
+        if 'cuda_rng_state' in state and torch.cuda.is_available():
+            torch.cuda.set_rng_state(state['cuda_rng_state'])
+        print(f"Resumed from epoch {start_epoch}")
 
     # Print first example for sanity check
     first_sample = dataset[0]
@@ -350,9 +355,6 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
         epoch_loss = 0.0
         epoch_start = time.time()
         for step, batch in enumerate(dataloader, 1):
-            # Skip steps already completed in a resumed epoch
-            if epoch == start_epoch and step <= start_step:
-                continue
             input_ids_batch = batch['input_ids'].to(device)
             attention_mask_batch = batch['attention_mask'].to(device)
             labels_batch = batch['labels'].to(device)
@@ -384,7 +386,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                                         loss.item(), avg_loss, training_start, total_steps)
 
             if step % args["save_every"] == 0:
-                _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_directory, epoch, step)
+                _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_directory, epoch)
                 if args.get("enableSampleMode", False):
                     sample_prompts = ["Hello, how are you?", "What's your name?", "Tell me a joke."]
                     sample_prompt = random.choice(sample_prompts)
@@ -393,19 +395,20 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                     print(f"Generated Response: {response}")
                     model.train()  # switch back after eval in generate_responses
 
-        avg_epoch_loss = epoch_loss / len(dataloader)
+        num_steps = len(dataloader)
+        avg_epoch_loss = epoch_loss / num_steps if num_steps > 0 else 0.0
         print(f"Epoch {epoch+1} completed. Average Loss: {avg_epoch_loss:.4f}")
         print(f"Epoch {epoch+1} duration: {time.time() - epoch_start:.0f} seconds")
 
-        _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_directory, epoch + 1, 0)
+        _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_directory, epoch + 1)
 
     total_training_time = time.time() - training_start
     print(f"Training completed in {total_training_time // 60:.0f} minutes and {total_training_time % 60:.0f} seconds.")
 
 
 def _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_directory: str,
-                     epoch: int, step: int) -> None:
-    """Saves LoRA adapter, tokenizer, and optimizer/scheduler state for full resume."""
+                     epoch: int) -> None:
+    """Saves LoRA adapter, tokenizer, optimizer/scheduler/RNG state for full resume."""
     adapter_dir = os.path.join(model_directory, "lora_adapter")
     base_dir = os.path.join(model_directory, "base_model")
     training_state_path = os.path.join(model_directory, "training_state.pt")
@@ -417,13 +420,15 @@ def _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_direc
         'optimizer': optimizer.state_dict(),
         'scheduler': scheduler.state_dict(),
         'epoch': epoch,
-        'step': step
+        'rng_state': torch.get_rng_state(),
     }
+    if torch.cuda.is_available():
+        state['cuda_rng_state'] = torch.cuda.get_rng_state()
     if scaler is not None:
         state['scaler'] = scaler.state_dict()
     torch.save(state, training_state_path)
 
-    print(f"Checkpoint saved (epoch {epoch}, step {step})")
+    print(f"Checkpoint saved (epoch {epoch})")
 
 
 #                      CLEAN TEXT FUNCTION

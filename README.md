@@ -95,8 +95,8 @@ Run `python runclean.py` for an interactive CSV cleaner that lets you review and
 - **Directory structure**:
   ```
   checkpoint/run3/
-  ├── cleaned.csv              # your training data
-  ├── base_model/              # Phi-2 weights (downloaded once)
-  ├── lora_adapter/            # your fine-tune (small, portable)
-  └── training_state.pt        # optimizer/scheduler state for resuming
+  |-- cleaned.csv              # your training data
+  |-- base_model/              # Phi-2 weights (downloaded once)
+  |-- lora_adapter/            # your fine-tune (small, portable)
+  |-- training_state.pt        # optimizer/scheduler/RNG state for resuming
   ```

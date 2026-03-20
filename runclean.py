@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import hashlib
 import atexit
 import tkinter as tk
 from tkinter import filedialog
@@ -25,15 +26,20 @@ if not file_path:
 # Load the CSV file into a DataFrame
 df = pd.read_csv(file_path)
 
-# Initialize index from saved state (default to 0)
-index_file = 'checkpoint/index.txt'
+# Per-file index tracking: use a hash of the file path so different CSVs get separate cursors
+file_hash = hashlib.md5(os.path.abspath(file_path).encode()).hexdigest()[:8]
+index_dir = 'checkpoint'
+os.makedirs(index_dir, exist_ok=True)
+index_file = os.path.join(index_dir, f'index_{file_hash}.txt')
 index = 0
 
 if os.path.exists(index_file):
     with open(index_file, 'r') as f:
         content = f.read().strip()
         if content:
-            index = int(content)
+            saved_index = int(content)
+            # Clamp to dataset size in case the CSV shrank
+            index = min(saved_index, len(df))
 
 pending_deletes = []
 SAVE_EVERY = 20
@@ -54,6 +60,8 @@ def flush_pending():
 
 # Ensure pending deletes are saved even on Ctrl+C or unexpected exit
 atexit.register(flush_pending)
+
+print(f"{colors.GREY}Cleaning: {file_path} (starting at row {index + 1}/{len(df)}){colors.ENDC}")
 
 while index < len(df):
     row = df.iloc[index]
