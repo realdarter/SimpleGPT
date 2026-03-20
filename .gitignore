@@ -15,3 +15,10 @@ cleaned_darter.csv
 
 # Ignore all plain text files
 *.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Temp files
+tempCodeRunnerFile.py

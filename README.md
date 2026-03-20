@@ -1,99 +1,102 @@
-# GPT-2 Chatbot Fine-Tuning 🤖
-Fine-tune a pre-trained GPT-2 model to generate contextually coherent responses in a conversational setting. This guide will help you adapt GPT-2 for chat and reply tasks using your custom dataset.
+# SimpleGPT - Discord Chatbot Fine-Tuning
 
-# Requirements
-- Python 3.6 or better
-- Packages: torch transformers datasets (You can install these packages using `pip install torch transformers datasets`)
+Fine-tune Microsoft Phi-2 (2.7B) with LoRA to generate conversational responses trained on your Discord messages.
 
-# Setup
-- Open Terminal and navigate to your desired directory: {cd path_to_your_directory}
-- Optional Setup separate Python environment {python -m venv myenv}
-- Download the repository using `git clone [[your-repository-url]](https://github.com/realdarter/Goose-AI)`
-- Prepare Dataset: Create a CSV file with context-response pairs. Ensure the file has a header with columns labeled context and reply.
+## Requirements
+- Python 3.8+
+- NVIDIA GPU recommended (works on CPU but much slower)
+- Packages: `torch transformers peft pandas requests`
 
-# Features
-- **Torch Debugging for GPU Use**: Leverages PyTorch’s capabilities for debugging and utilizing GPU acceleration.
-- **Easy Access to Training**: Simple and customizable training configuration to suit various needs.
+## Setup
 
-# Steps
-1. **Install Dependencies**:
-   ```bash
-   pip install torch 
-   pip install transformers
-   pip install pandas
-   ```
-   - Preferably install torch using NVIDIA GPU for accelerated training.  
-     [Get GPU-enabled PyTorch](https://pytorch.org/get-started/locally/)
+```bash
+git clone https://github.com/realdarter/SimpleGPT
+cd SimpleGPT
+pip install torch transformers peft pandas requests
+```
 
-2. **Prepare Dataset**:
-   Create a dataset of context-response pairs for fine-tuning.
-   Example of Context, Reply
-   ![image](https://github.com/realdarter/Goose-AI/assets/100169417/7b65736c-4efd-430e-b408-b584d38a78cd)
+Preferably install PyTorch with CUDA support: [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/)
 
-   ```
-   context,reply
-   How are you doing so far?,I am doing fine!
-   lol!,Thats funny
-   "I need to talk to you","What, do, you, want"
-   Food is an important part of our life, You are making me very hungry.
-   ```
+## Prepare Dataset
 
-**Tokenize Dataset**: 
-The script will automatically tokenize the dataset. Ensure your CSV file is correctly formatted and located in the specified path.
+Create a CSV file with `context` and `reply` columns:
 
-batch_size: Number of examples per training batch.
-num_train_epochs: Number of training epochs.
-learning_rate: Learning rate for optimizer.
+```csv
+context,reply
+How are you doing so far?,I am doing fine!
+lol!,Thats funny
+"I need to talk to you","What, do, you, want"
+```
 
-**Train the Model**:
-Run the script to start training. GPU acceleration will be used to speed up the process. The training progress will be printed in the terminal. The model will automatically save itself to the specified directory for future use to continue training.
+Place it at `checkpoint/run3/cleaned.csv` (or adjust the path in `train.py`).
 
-# Example Code for Training and Testing:
-# Train
+## Train
+
 ```python
-from chat_gen import *
 import os
+from chat_gen import create_args, train_model
 
-model_directory = 'checkpoint/cleaned.csv'
-#csv_path is directory to data csv
+model_directory = 'checkpoint/run3'
 csv_path = os.path.join(model_directory, 'cleaned.csv')
 
-# Prepare the CSV data
 args = create_args(
-  num_epochs=3,
-  batch_size=4,
-  learning_rate=3e-5,
-  save_every=1000,
-  max_length=512,
+    num_epochs=3,
+    batch_size=4,
+    learning_rate=2e-4,
+    save_every=500,
+    max_length=512,
 )
+
 train_model(model_directory, csv_path, args)
 ```
 
-# Test
+Or just run `python train.py`.
+
+Phi-2 (~5GB) downloads automatically on first run. The LoRA adapter (~50MB) is saved separately.
+
+## Test
 
 ```python
-from chat_gen import *
-
-model_directory = 'checkpoint/run1'  # Replace with your actual model directory
-model, tokenizer = load_model_and_tokenizer(model_directory)
-
-args = create_args(
-   max_length=512,
-   temperature=0.8,
-   top_k=60,
-   top_p=0.92,
-   repetition_penalty=1.2
+from chat_gen import (
+    create_args, generate_responses, load_model_and_tokenizer,
+    ensure_tokens, SPECIAL_TOKENS, _get_device
 )
 
-prompt_text = input("Input: ")
-response = generate_responses(model, tokenizer, prompt_text, args=args, clean_result=True)
+model_directory = 'checkpoint/run3'
+model, tokenizer = load_model_and_tokenizer(model_directory, download=False)
+device = _get_device()
+ensure_tokens(model, tokenizer, special_tokens=SPECIAL_TOKENS)
+model.to(device)
 
-print(f"Prompt: {prompt_text}")
+args = create_args(max_length=512, temperature=0.8, top_k=60, top_p=0.92, repetition_penalty=1.2)
+
+prompt_text = input("Input: ")
+response = generate_responses(model, tokenizer, prompt_text, device=device, args=args, clean_result=True)
 print(f"Generated Response: {response}")
 ```
 
+Or just run `python test.py`.
 
+## Data Cleaning
 
+Run `python runclean.py` for an interactive CSV cleaner that lets you review and delete bad training pairs.
 
-Fine-tuning GPT-2 involves preparing your dataset, configuring training parameters, and running the training script. The model will be saved for future use, and you can test it with new contexts to generate responses.
+## Discord Bot
 
+1. Put your Discord token in `token.txt`
+2. Update the `channel_id` in `main.py`
+3. Run `python main.py`
+
+## Architecture
+
+- **Base model**: Microsoft Phi-2 (2.7B parameters)
+- **Fine-tuning**: LoRA (trains ~1% of parameters)
+- **Training features**: Mixed precision (FP16), gradient clipping, linear LR warmup + decay, lazy tokenization
+- **Directory structure**:
+  ```
+  checkpoint/run3/
+  ├── cleaned.csv              # your training data
+  ├── base_model/              # Phi-2 weights (downloaded once)
+  ├── lora_adapter/            # your fine-tune (small, portable)
+  └── training_state.pt        # optimizer/scheduler state for resuming
+  ```
