@@ -157,7 +157,7 @@ def check_cuda():
 
         for i in range(torch.cuda.device_count()):
             props = torch.cuda.get_device_properties(i)
-            vram_gb = props.total_mem / (1024 ** 3)
+            vram_gb = getattr(props, 'total_memory', getattr(props, 'total_mem', 0)) / (1024 ** 3)
             print(f"\n  GPU {i}: {props.name}")
             print(f"    VRAM:          {vram_gb:.1f} GB")
             print(f"    Compute:       {props.major}.{props.minor}")
@@ -265,7 +265,7 @@ def check_training_readiness():
     if not torch.cuda.is_available():
         issues.append("No GPU available — training will be extremely slow on CPU")
     else:
-        vram = torch.cuda.get_device_properties(0).total_mem / (1024 ** 3)
+        vram = getattr(torch.cuda.get_device_properties(0), 'total_memory', getattr(torch.cuda.get_device_properties(0), 'total_mem', 0)) / (1024 ** 3)
         if vram < 8:
             issues.append(f"GPU has {vram:.1f} GB VRAM — may be tight for Phi-2 + LoRA (recommend 10+ GB)")
 
@@ -291,7 +291,7 @@ def check_training_readiness():
         print("  [OK] Everything looks good for training.")
         if torch.cuda.is_available():
             name = torch.cuda.get_device_name(0)
-            vram = torch.cuda.get_device_properties(0).total_mem / (1024 ** 3)
+            vram = getattr(torch.cuda.get_device_properties(0), 'total_memory', getattr(torch.cuda.get_device_properties(0), 'total_mem', 0)) / (1024 ** 3)
             print(f"  Ready to train on {name} ({vram:.1f} GB VRAM)")
 
 
