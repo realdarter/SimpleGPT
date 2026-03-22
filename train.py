@@ -5,10 +5,11 @@ if __name__ == "__main__":
     csv_path = 'training_data.csv'
 
     args = create_args(
-        # Training settings (batch_size, max_length, save_every, warmup auto-tuned from VRAM)
+        # Training settings (batch_size, max_length, warmup auto-tuned from VRAM)
+        save_every=5000,
         learning_rate=2e-4,
         patience=3,
-        max_epochs=15,
+        max_epochs=10,
         # Generation settings (only matter when testing, not during training)
         temperature=0.8,
         top_k=60,

@@ -12,6 +12,7 @@ This module provides functions for:
 import os
 import time
 import random
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -183,23 +184,28 @@ def _get_dtype(device: torch.device) -> torch.dtype:
     return torch.float32
 
 
+VRAM_RESERVE_FRACTION = 0.10  # always keep 10% VRAM free for the OS/other apps
+
+
 def _get_free_vram_gb() -> float:
-    """Returns free VRAM in GB. Returns 0 if no GPU."""
+    """Returns usable free VRAM in GB (reserves 10% for system). Returns 0 if no GPU."""
     if not torch.cuda.is_available():
         return 0.0
     props = torch.cuda.get_device_properties(0)
     total = getattr(props, 'total_memory', getattr(props, 'total_mem', 0))
-    reserved = torch.cuda.memory_reserved(0)
-    return (total - reserved) / (1024 ** 3)
+    reserved_by_torch = torch.cuda.memory_reserved(0)
+    system_reserve = total * VRAM_RESERVE_FRACTION
+    usable = total - reserved_by_torch - system_reserve
+    return max(0.0, usable / (1024 ** 3))
 
 
 def _vram_to_batch_size(vram_gb: float) -> int:
-    """Pick a batch size based on available VRAM."""
-    if vram_gb >= 20:
+    """Pick a batch size based on available free VRAM (after model is loaded)."""
+    if vram_gb >= 10:
         return 8
-    elif vram_gb >= 14:
+    elif vram_gb >= 6:
         return 4
-    elif vram_gb >= 8:
+    elif vram_gb >= 3:
         return 2
     else:
         return 1
@@ -214,19 +220,17 @@ def _auto_tune_args(args: Dict[str, Any], dataset_size: int) -> Dict[str, Any]:
     vram = _get_free_vram_gb()
 
     auto_batch = _vram_to_batch_size(vram)
-    auto_max_len = 256 if vram >= 14 else 128
+    auto_max_len = 256 if vram >= 6 else 128
 
-    # Auto save_every: ~2-3 saves per epoch
     steps_per_epoch = max(1, dataset_size // auto_batch)
-    auto_save_every = max(100, steps_per_epoch // 3)
 
     # Auto warmup: ~3% of first epoch
     auto_warmup = max(50, steps_per_epoch // 30)
 
     args["batch_size"] = auto_batch
     args["max_length"] = auto_max_len
-    args["save_every"] = auto_save_every
     args["warmup_steps"] = auto_warmup
+    # save_every is user-controlled, don't override it
 
     print(f"\n--- Auto-tuned for {vram:.1f} GB free VRAM ---")
     print(f"  batch_size:  {auto_batch}")
@@ -249,7 +253,8 @@ def download_base_model(save_directory: str) -> bool:
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL_NAME,
         dtype=_get_dtype(device),
-        trust_remote_code=True
+        trust_remote_code=True,
+        low_cpu_mem_usage=True
     )
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_NAME, trust_remote_code=True)
     model.save_pretrained(save_directory)
@@ -279,6 +284,7 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
         raise FileNotFoundError(f"Base model not found at {base_model_dir}. Set download=True or provide the model.")
 
     # Load base model — use 4-bit quantization for training to save VRAM (if bitsandbytes installed)
+    # low_cpu_mem_usage=True loads weights shard by shard instead of all at once (prevents system lag)
     if for_training and device.type == "cuda" and HAS_BNB:
         print("Loading model with 4-bit quantization (QLoRA)...")
         bnb_config = BitsAndBytesConfig(
@@ -290,7 +296,8 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
         model = AutoModelForCausalLM.from_pretrained(
             base_model_dir,
             quantization_config=bnb_config,
-            trust_remote_code=True
+            trust_remote_code=True,
+            low_cpu_mem_usage=True
         )
         model = prepare_model_for_kbit_training(model)
     elif for_training and device.type == "cuda" and not HAS_BNB:
@@ -299,24 +306,47 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
         model = AutoModelForCausalLM.from_pretrained(
             base_model_dir,
             dtype=dtype,
-            trust_remote_code=True
+            trust_remote_code=True,
+            low_cpu_mem_usage=True,
+            device_map="auto"
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             base_model_dir,
             dtype=dtype,
-            trust_remote_code=True
+            trust_remote_code=True,
+            low_cpu_mem_usage=True,
+            device_map="auto"
         )
     tokenizer = AutoTokenizer.from_pretrained(base_model_dir, trust_remote_code=True)
 
     # Load or create LoRA adapter
     if check_adapter_exists(adapter_dir):
         print("Loading existing LoRA adapter...")
-        model = PeftModel.from_pretrained(model, adapter_dir)
-        if for_training:
-            for name, param in model.named_parameters():
-                if "lora_" in name:
-                    param.requires_grad = True
+        try:
+            model = PeftModel.from_pretrained(model, adapter_dir)
+            if for_training:
+                for name, param in model.named_parameters():
+                    if "lora_" in name:
+                        param.requires_grad = True
+        except RuntimeError as e:
+            if "size mismatch" in str(e):
+                print(f"Warning: Old adapter is incompatible (embedding size changed). Deleting and creating fresh.")
+                import shutil
+                shutil.rmtree(adapter_dir)
+                training_state = os.path.join(model_directory, "training_state.pt")
+                if os.path.isfile(training_state):
+                    os.remove(training_state)
+                if for_training:
+                    lora_config = LoraConfig(
+                        task_type=TaskType.CAUSAL_LM, r=16, lora_alpha=32, lora_dropout=0.05,
+                        target_modules=["q_proj", "k_proj", "v_proj", "dense", "fc1", "fc2"],
+                        bias="none"
+                    )
+                    model = get_peft_model(model, lora_config)
+                    model.print_trainable_parameters()
+            else:
+                raise
     elif for_training:
         print("Creating new LoRA adapter...")
         lora_config = LoraConfig(
@@ -371,7 +401,8 @@ def create_args(num_epochs: int = 0, batch_size: int = 1, learning_rate: float =
 
 
 def __print_training_progress__(epoch: int, num_epochs: int, step: int, steps_in_epoch: int,
-                                loss: float, avg_loss: float, start_time: float, total_steps: int) -> None:
+                                loss: float, avg_loss: float, start_time: float, total_steps: int,
+                                lr: float = 0.0) -> None:
     elapsed_time = time.time() - start_time
     steps_completed = epoch * steps_in_epoch + step
     steps_remaining = total_steps - steps_completed
@@ -379,7 +410,8 @@ def __print_training_progress__(epoch: int, num_epochs: int, step: int, steps_in
     estimated_time_remaining = avg_time_per_step * steps_remaining
     print(
         f"Epoch [{epoch+1}/{num_epochs}], Step [{step}/{steps_in_epoch}], "
-        f"Loss: {loss:.4f}, Avg Loss: {avg_loss:.4f}, Elapsed: {elapsed_time:.2f}s, ETA: {estimated_time_remaining:.2f}s"
+        f"Loss: {loss:.4f}, Avg Loss: {avg_loss:.4f}, LR: {lr:.2e}, "
+        f"Elapsed: {_format_time(elapsed_time)}, ETA: {_format_time(estimated_time_remaining)}"
     )
 
 
@@ -453,6 +485,10 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
         print("Error: CSV is empty or has no valid rows. Nothing to train on.")
         return
 
+    # Flush cache so VRAM measurement is accurate after model load
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+
     # Auto-tune args based on available VRAM and dataset size
     args = _auto_tune_args(args, len(encoded_data))
 
@@ -514,6 +550,9 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     else:
         print(f"Mode: FIXED ({max_epochs} epochs)")
     print(f"Steps per epoch: {len(train_loader)}, Warmup: {warmup_steps}")
+
+    # Suppress scheduler ordering warning (harmless on first step with resume)
+    warnings.filterwarnings("ignore", message=".*lr_scheduler.step.*optimizer.step.*")
 
     # Early stopping state
     best_val_loss = float('inf')
@@ -581,8 +620,9 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
             epoch_loss += loss.item()
             avg_loss = epoch_loss / step
 
+            current_lr = scheduler.get_last_lr()[0]
             __print_training_progress__(epoch, max_epochs, step, len(train_loader),
-                                        loss.item(), avg_loss, training_start, total_steps)
+                                        loss.item(), avg_loss, training_start, total_steps, lr=current_lr)
 
             if step % args["save_every"] == 0:
                 _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_directory, epoch)
