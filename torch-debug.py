@@ -1,19 +1,99 @@
 """
 Diagnostic tool for SimpleGPT training environment.
-Checks PyTorch, CUDA, GPU, and key dependencies.
-Recommends the correct pip install command.
+Scans project files for dependencies, checks installs,
+checks PyTorch/CUDA/GPU, and offers to auto-install missing packages.
 """
 
+import ast
+import glob
+import os
 import sys
 import subprocess
 import shutil
 import re
+
+# Packages that are always required regardless of imports
+ALWAYS_REQUIRED = {"torch", "pandas"}
+
+# Map import names to pip package names (where they differ)
+IMPORT_TO_PIP = {
+    "torch": "torch",
+    "transformers": "transformers",
+    "peft": "peft",
+    "pandas": "pandas",
+    "requests": "requests",
+    "sklearn": "scikit-learn",
+    "cv2": "opencv-python",
+    "PIL": "Pillow",
+    "yaml": "pyyaml",
+    "tkinter": None,  # stdlib, can't pip install
+}
+
+# Standard library modules to ignore
+STDLIB = {
+    "os", "sys", "time", "re", "json", "math", "random", "collections",
+    "typing", "datetime", "subprocess", "shutil", "hashlib", "atexit",
+    "functools", "itertools", "pathlib", "glob", "io", "copy", "abc",
+    "dataclasses", "enum", "string", "textwrap", "struct", "pickle",
+    "csv", "argparse", "logging", "unittest", "tkinter", "ast",
+}
 
 
 def section(title):
     print(f"\n{'=' * 50}")
     print(f"  {title}")
     print(f"{'=' * 50}")
+
+
+def scan_project_imports():
+    """Scan all .py files in the project for third-party imports."""
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    py_files = glob.glob(os.path.join(project_dir, "*.py"))
+
+    imports = set()
+    for filepath in py_files:
+        # Skip this file
+        if os.path.basename(filepath) == "torch-debug.py":
+            continue
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                tree = ast.parse(f.read(), filename=filepath)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        imports.add(alias.name.split(".")[0])
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        imports.add(node.module.split(".")[0])
+        except Exception:
+            pass
+
+    # Add always-required packages
+    imports.update(ALWAYS_REQUIRED)
+
+    # Filter out stdlib and local project files
+    local_files = {os.path.splitext(os.path.basename(f))[0] for f in py_files}
+    third_party = set()
+    for imp in imports:
+        if imp in STDLIB:
+            continue
+        if imp in local_files:
+            continue
+        third_party.add(imp)
+
+    return third_party
+
+
+def get_pip_name(import_name):
+    """Convert an import name to a pip package name."""
+    if import_name in IMPORT_TO_PIP:
+        return IMPORT_TO_PIP[import_name]
+    return import_name
+
+
+def get_vram(props):
+    """Get total VRAM from device properties, compatible across PyTorch versions."""
+    return getattr(props, 'total_memory', getattr(props, 'total_mem', 0))
 
 
 def detect_nvidia_gpu():
@@ -33,7 +113,6 @@ def detect_nvidia_gpu():
 
 def detect_system_cuda_version():
     """Detect CUDA version from nvcc or nvidia-smi."""
-    # Try nvcc first
     nvcc = shutil.which("nvcc")
     if nvcc:
         try:
@@ -44,7 +123,6 @@ def detect_system_cuda_version():
         except Exception:
             pass
 
-    # Fallback: nvidia-smi reports driver CUDA version
     nvidia_smi = shutil.which("nvidia-smi")
     if nvidia_smi:
         try:
@@ -68,8 +146,6 @@ def get_recommended_install(cuda_version_str):
     except ValueError:
         return None, None
 
-    # Map system CUDA version to the best PyTorch CUDA build
-    # These are the builds available from pytorch.org as of 2025
     if cuda_ver >= 13.0:
         tag = "cu130"
         label = "CUDA 13.0"
@@ -143,7 +219,6 @@ def check_cuda():
         print("  [SKIP] PyTorch not installed.")
         return
 
-    # Detect system CUDA
     system_cuda = detect_system_cuda_version()
     if system_cuda:
         print(f"  System CUDA version: {system_cuda}")
@@ -157,7 +232,7 @@ def check_cuda():
 
         for i in range(torch.cuda.device_count()):
             props = torch.cuda.get_device_properties(i)
-            vram_gb = getattr(props, 'total_memory', getattr(props, 'total_mem', 0)) / (1024 ** 3)
+            vram_gb = get_vram(props) / (1024 ** 3)
             print(f"\n  GPU {i}: {props.name}")
             print(f"    VRAM:          {vram_gb:.1f} GB")
             print(f"    Compute:       {props.major}.{props.minor}")
@@ -181,7 +256,7 @@ def check_cuda():
 
 
 def recommend_install():
-    section("Recommended Install")
+    section("Recommended PyTorch Install")
 
     gpus = detect_nvidia_gpu()
     if gpus is None:
@@ -217,7 +292,6 @@ def recommend_install():
     print(f"    {cmd}")
     print()
 
-    # Check if current PyTorch matches
     try:
         import torch
         if torch.cuda.is_available():
@@ -231,25 +305,52 @@ def recommend_install():
 
 
 def check_dependencies():
-    section("Dependencies")
-    packages = {
-        "transformers": "transformers",
-        "peft": "peft",
-        "pandas": "pandas",
-        "torch": "torch",
-    }
-    all_good = True
-    for display_name, import_name in packages.items():
+    section("Dependencies (auto-scanned from project)")
+
+    required = scan_project_imports()
+    installed = {}
+    missing = []
+
+    for import_name in sorted(required):
+        pip_name = get_pip_name(import_name)
+        if pip_name is None:
+            # stdlib like tkinter — skip
+            continue
         try:
             mod = __import__(import_name)
-            version = getattr(mod, "__version__", "unknown")
-            print(f"  [OK]   {display_name:15s} {version}")
+            version = getattr(mod, "__version__", "installed")
+            installed[import_name] = version
+            print(f"  [OK]   {import_name:15s} {version}")
         except ImportError:
-            print(f"  [FAIL] {display_name:15s} not installed")
-            all_good = False
+            print(f"  [FAIL] {import_name:15s} not installed  (pip: {pip_name})")
+            missing.append((import_name, pip_name))
 
-    if not all_good:
-        print("\n  Fix: pip install torch transformers peft pandas")
+    if missing:
+        print()
+        pip_names = " ".join(pip for _, pip in missing)
+        print(f"  Missing packages detected.")
+        print(f"  Install command: pip install {pip_names}")
+        print()
+        answer = input("  Install missing packages now? [y/N]: ").strip().lower()
+        if answer == "y":
+            # Don't auto-install torch — it needs the CUDA index URL
+            torch_missing = any(imp == "torch" for imp, _ in missing)
+            non_torch = [(imp, pip) for imp, pip in missing if imp != "torch"]
+
+            if non_torch:
+                pip_cmd = [sys.executable, "-m", "pip", "install"] + [pip for _, pip in non_torch]
+                print(f"\n  Running: {' '.join(pip_cmd)}")
+                subprocess.run(pip_cmd)
+
+            if torch_missing:
+                print()
+                print("  torch needs special install for CUDA support.")
+                print("  See the 'Recommended PyTorch Install' section above.")
+        else:
+            print("  Skipped.")
+    else:
+        print()
+        print(f"  All {len(installed)} dependencies installed.")
 
 
 def check_training_readiness():
@@ -265,7 +366,7 @@ def check_training_readiness():
     if not torch.cuda.is_available():
         issues.append("No GPU available — training will be extremely slow on CPU")
     else:
-        vram = getattr(torch.cuda.get_device_properties(0), 'total_memory', getattr(torch.cuda.get_device_properties(0), 'total_mem', 0)) / (1024 ** 3)
+        vram = get_vram(torch.cuda.get_device_properties(0)) / (1024 ** 3)
         if vram < 8:
             issues.append(f"GPU has {vram:.1f} GB VRAM — may be tight for Phi-2 + LoRA (recommend 10+ GB)")
 
@@ -291,7 +392,7 @@ def check_training_readiness():
         print("  [OK] Everything looks good for training.")
         if torch.cuda.is_available():
             name = torch.cuda.get_device_name(0)
-            vram = getattr(torch.cuda.get_device_properties(0), 'total_memory', getattr(torch.cuda.get_device_properties(0), 'total_mem', 0)) / (1024 ** 3)
+            vram = get_vram(torch.cuda.get_device_properties(0)) / (1024 ** 3)
             print(f"  Ready to train on {name} ({vram:.1f} GB VRAM)")
 
 
@@ -330,7 +431,7 @@ if __name__ == "__main__":
     print("SimpleGPT Environment Diagnostic")
     check_python()
     torch_ok = check_torch()
-    has_nvidia = check_nvidia()
+    check_nvidia()
     check_cuda()
     recommend_install()
     check_dependencies()
