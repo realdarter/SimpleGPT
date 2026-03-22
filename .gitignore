@@ -12,6 +12,7 @@ cleaned.csv
 cleaned2.csv
 lgbtq.csv
 cleaned_darter.csv
+training_data.csv
 
 # Ignore all plain text files
 *.txt

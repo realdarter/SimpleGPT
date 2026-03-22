@@ -38,7 +38,10 @@ Place it at `checkpoint/run3/cleaned.csv` (or adjust the path in `train.py`).
 
 | Arg | Default | What it does |
 |-----|---------|-------------|
-| `num_epochs` | 1 | How many full passes through your dataset. More = learns more, but too many = overfitting |
+| `num_epochs` | 0 | **0 = auto-stop** (stops when loss plateaus). Set to a number like 3 to force exactly 3 epochs |
+| `patience` | 3 | (Auto-stop only) How many epochs without improvement before stopping |
+| `max_epochs` | 50 | (Auto-stop only) Hard cap so it doesn't run forever |
+| `val_split` | 0.1 | (Auto-stop only) Fraction of data held out for validation (10%) |
 | `batch_size` | 1 | How many examples to process at once. Higher = faster but uses more VRAM |
 | `learning_rate` | 2e-4 | How aggressively the model updates. Too high = unstable, too low = slow learning |
 | `warmup_steps` | 100 | Steps where learning rate ramps up from 0. Prevents early instability |

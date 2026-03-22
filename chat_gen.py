@@ -17,9 +17,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 import torch
 from torch.optim import AdamW
-from torch.utils.data import DataLoader, Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, get_linear_schedule_with_warmup
-from peft import LoraConfig, get_peft_model, PeftModel, TaskType
+from torch.utils.data import DataLoader, Dataset, Subset
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, get_linear_schedule_with_warmup
+from peft import LoraConfig, get_peft_model, PeftModel, TaskType, prepare_model_for_kbit_training
 
 
 BASE_MODEL_NAME = "microsoft/phi-2"
@@ -50,7 +50,7 @@ class LazyTokenDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         # Tokenize without padding — we pad manually after appending EOS
-        encoded = self.tokenizer.encode_plus(
+        encoded = self.tokenizer(
             self.texts[idx],
             max_length=self.max_length - 1,  # leave room for EOS
             truncation=True,
@@ -175,6 +175,61 @@ def _get_dtype(device: torch.device) -> torch.dtype:
     return torch.float32
 
 
+def _get_free_vram_gb() -> float:
+    """Returns free VRAM in GB. Returns 0 if no GPU."""
+    if not torch.cuda.is_available():
+        return 0.0
+    props = torch.cuda.get_device_properties(0)
+    total = getattr(props, 'total_memory', getattr(props, 'total_mem', 0))
+    reserved = torch.cuda.memory_reserved(0)
+    return (total - reserved) / (1024 ** 3)
+
+
+def _vram_to_batch_size(vram_gb: float) -> int:
+    """Pick a batch size based on available VRAM."""
+    if vram_gb >= 20:
+        return 8
+    elif vram_gb >= 14:
+        return 4
+    elif vram_gb >= 8:
+        return 2
+    else:
+        return 1
+
+
+def _auto_tune_args(args: Dict[str, Any], dataset_size: int) -> Dict[str, Any]:
+    """
+    Automatically adjusts max_length, save_every, warmup, and initial batch_size
+    based on available VRAM and dataset size.
+    """
+    args = dict(args)  # don't mutate original
+    vram = _get_free_vram_gb()
+
+    auto_batch = _vram_to_batch_size(vram)
+    auto_max_len = 256 if vram >= 14 else 128
+
+    # Auto save_every: ~2-3 saves per epoch
+    steps_per_epoch = max(1, dataset_size // auto_batch)
+    auto_save_every = max(100, steps_per_epoch // 3)
+
+    # Auto warmup: ~3% of first epoch
+    auto_warmup = max(50, steps_per_epoch // 30)
+
+    args["batch_size"] = auto_batch
+    args["max_length"] = auto_max_len
+    args["save_every"] = auto_save_every
+    args["warmup_steps"] = auto_warmup
+
+    print(f"\n--- Auto-tuned for {vram:.1f} GB free VRAM ---")
+    print(f"  batch_size:  {auto_batch}")
+    print(f"  max_length:  {auto_max_len}")
+    print(f"  save_every:  {auto_save_every}")
+    print(f"  warmup:      {auto_warmup}")
+    print()
+
+    return args
+
+
 def download_base_model(save_directory: str) -> bool:
     """Downloads and saves the base model and tokenizer if not already present."""
     if check_base_model_exists(save_directory):
@@ -185,7 +240,7 @@ def download_base_model(save_directory: str) -> bool:
     device = _get_device()
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL_NAME,
-        torch_dtype=_get_dtype(device),
+        dtype=_get_dtype(device),
         trust_remote_code=True
     )
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_NAME, trust_remote_code=True)
@@ -215,12 +270,26 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
     if not check_base_model_exists(base_model_dir):
         raise FileNotFoundError(f"Base model not found at {base_model_dir}. Set download=True or provide the model.")
 
-    # Load base model
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model_dir,
-        torch_dtype=dtype,
-        trust_remote_code=True
-    )
+    # Load base model — use 4-bit quantization for training to save VRAM
+    if for_training and device.type == "cuda":
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model_dir,
+            quantization_config=bnb_config,
+            trust_remote_code=True
+        )
+        model = prepare_model_for_kbit_training(model)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model_dir,
+            dtype=dtype,
+            trust_remote_code=True
+        )
     tokenizer = AutoTokenizer.from_pretrained(base_model_dir, trust_remote_code=True)
 
     # Load or create LoRA adapter
@@ -253,11 +322,18 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
 
 #         TRAINING ARGUMENTS & PROGRESS FUNCTIONS
 
-def create_args(num_epochs: int = 1, batch_size: int = 1, learning_rate: float = 2e-4,
+def create_args(num_epochs: int = 0, batch_size: int = 1, learning_rate: float = 2e-4,
                 save_every: int = 500, max_length: int = 512, max_new_tokens: int = 256,
                 temperature: float = 0.7, top_k: int = 50, top_p: float = 0.95,
                 repetition_penalty: float = 1.2, enableSampleMode: bool = False,
-                warmup_steps: int = 100) -> Dict[str, Any]:
+                warmup_steps: int = 100, patience: int = 3, max_epochs: int = 50,
+                val_split: float = 0.1) -> Dict[str, Any]:
+    """
+    num_epochs: 0 = auto-stop (default), any positive number = fixed epochs.
+    patience: how many epochs without improvement before auto-stopping.
+    max_epochs: upper limit when using auto-stop.
+    val_split: fraction of data to use for validation (used by auto-stop).
+    """
     return {
         "num_epochs": num_epochs,
         "batch_size": batch_size,
@@ -270,7 +346,10 @@ def create_args(num_epochs: int = 1, batch_size: int = 1, learning_rate: float =
         "top_p": top_p,
         "repetition_penalty": repetition_penalty,
         "enableSampleMode": enableSampleMode,
-        "warmup_steps": warmup_steps
+        "warmup_steps": warmup_steps,
+        "patience": patience,
+        "max_epochs": max_epochs,
+        "val_split": val_split
     }
 
 
@@ -289,9 +368,51 @@ def __print_training_progress__(epoch: int, num_epochs: int, step: int, steps_in
 
 #                      TRAINING FUNCTION
 
+def _evaluate(model, dataloader, device, use_amp) -> float:
+    """Run validation and return average loss."""
+    model.eval()
+    total_loss = 0.0
+    num_batches = 0
+    with torch.no_grad():
+        for batch in dataloader:
+            input_ids_batch = batch['input_ids'].to(device)
+            attention_mask_batch = batch['attention_mask'].to(device)
+            labels_batch = batch['labels'].to(device)
+
+            if use_amp:
+                with torch.amp.autocast(device.type):
+                    outputs = model(input_ids_batch, attention_mask=attention_mask_batch, labels=labels_batch)
+            else:
+                outputs = model(input_ids_batch, attention_mask=attention_mask_batch, labels=labels_batch)
+
+            total_loss += outputs.loss.item()
+            num_batches += 1
+
+    model.train()
+    return total_loss / num_batches if num_batches > 0 else 0.0
+
+
+def _format_time(seconds: float) -> str:
+    """Format seconds into a readable string."""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    elif seconds < 3600:
+        return f"{seconds // 60:.0f}m {seconds % 60:.0f}s"
+    else:
+        hours = seconds // 3600
+        mins = (seconds % 3600) // 60
+        return f"{hours:.0f}h {mins:.0f}m"
+
+
 def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, Any]] = None) -> None:
     if args is None:
         args = create_args()
+
+    # Determine mode: auto-stop (num_epochs=0) or fixed
+    auto_stop = args["num_epochs"] == 0
+    max_epochs = args.get("max_epochs", 50) if auto_stop else args["num_epochs"]
+    patience = args.get("patience", 3)
+    val_split = args.get("val_split", 0.1)
 
     model, tokenizer = load_model_and_tokenizer(model_directory, for_training=True)
     device = _get_device()
@@ -299,28 +420,50 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     print(f"Using device: {device}")
 
     ensure_tokens(model, tokenizer, special_tokens=SPECIAL_TOKENS)
-    model.to(device)
+    if device.type != "cuda":
+        model.to(device)
+    # model is already on device after quantized loading on CUDA
 
-    # Only optimize LoRA parameters
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = AdamW(trainable_params, lr=args.get("learning_rate", 2e-4), weight_decay=0.01)
-    scaler = torch.amp.GradScaler(device.type) if use_amp else None
+    # Gradient checkpointing: recomputes activations during backward pass instead of storing them
+    # Uses less VRAM at the cost of ~20% slower training
+    model.gradient_checkpointing_enable()
 
     # Prepare dataset (lazy tokenization — doesn't load everything into RAM)
     encoded_data = prepare_csv(csv_path, start_token=tokenizer.bos_token, sep_token=tokenizer.sep_token)
     if len(encoded_data) == 0:
         print("Error: CSV is empty or has no valid rows. Nothing to train on.")
         return
-    dataset = LazyTokenDataset(
+
+    # Auto-tune args based on available VRAM and dataset size
+    args = _auto_tune_args(args, len(encoded_data))
+
+    # Only optimize LoRA parameters
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = AdamW(trainable_params, lr=args.get("learning_rate", 2e-4), weight_decay=0.01)
+    scaler = torch.amp.GradScaler(device.type) if use_amp else None
+    full_dataset = LazyTokenDataset(
         encoded_data, tokenizer, max_length=args["max_length"],
         sep_token=SPECIAL_TOKENS["sep_token"],
         eos_token=SPECIAL_TOKENS["eos_token"],
         pad_token=SPECIAL_TOKENS["pad_token"]
     )
-    dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
+
+    # Split into train/val for early stopping detection
+    total_size = len(full_dataset)
+    val_size = max(1, int(total_size * val_split)) if auto_stop else 0
+    train_size = total_size - val_size
+
+    indices = list(range(total_size))
+    random.shuffle(indices)
+    train_indices = indices[:train_size]
+    val_indices = indices[train_size:]
+
+    train_dataset = Subset(full_dataset, train_indices) if val_size > 0 else full_dataset
+    train_loader = DataLoader(train_dataset, batch_size=args["batch_size"], shuffle=True)
+    val_loader = DataLoader(Subset(full_dataset, val_indices), batch_size=args["batch_size"]) if val_size > 0 else None
 
     # Learning rate scheduler with warmup
-    total_steps = len(dataloader) * args["num_epochs"]
+    total_steps = len(train_loader) * max_epochs
     warmup_steps = min(args.get("warmup_steps", 100), total_steps // 5)
     scheduler = get_linear_schedule_with_warmup(optimizer, warmup_steps, total_steps)
 
@@ -341,20 +484,32 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
             torch.cuda.set_rng_state(state['cuda_rng_state'])
         print(f"Resumed from epoch {start_epoch}")
 
-    # Print first example for sanity check
-    first_sample = dataset[0]
+    # Print setup info
+    first_sample = full_dataset[0]
     print("First training example (with special tokens):")
     print(decode_data(tokenizer, first_sample['input_ids'], skip_special_tokens=False))
     print(f"\nTotal trainable parameters: {sum(p.numel() for p in trainable_params):,}")
-    print(f"Total steps: {total_steps}, Warmup: {warmup_steps}")
+    print(f"Training samples: {train_size}, Validation samples: {val_size}")
+    if auto_stop:
+        print(f"Mode: AUTO-STOP (patience={patience}, max={max_epochs} epochs)")
+    else:
+        print(f"Mode: FIXED ({max_epochs} epochs)")
+    print(f"Steps per epoch: {len(train_loader)}, Warmup: {warmup_steps}")
+
+    # Early stopping state
+    best_val_loss = float('inf')
+    epochs_without_improvement = 0
+    best_epoch = 0
+    epoch_times = []
 
     training_start = time.time()
     model.train()
 
-    for epoch in range(start_epoch, args["num_epochs"]):
+    for epoch in range(start_epoch, max_epochs):
         epoch_loss = 0.0
         epoch_start = time.time()
-        for step, batch in enumerate(dataloader, 1):
+
+        for step, batch in enumerate(train_loader, 1):
             input_ids_batch = batch['input_ids'].to(device)
             attention_mask_batch = batch['attention_mask'].to(device)
             labels_batch = batch['labels'].to(device)
@@ -382,7 +537,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
             epoch_loss += loss.item()
             avg_loss = epoch_loss / step
 
-            __print_training_progress__(epoch, args["num_epochs"], step, len(dataloader),
+            __print_training_progress__(epoch, max_epochs, step, len(train_loader),
                                         loss.item(), avg_loss, training_start, total_steps)
 
             if step % args["save_every"] == 0:
@@ -393,17 +548,60 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                     print(f"Prompt: {sample_prompt}")
                     response = generate_responses(model, tokenizer, sample_prompt, device=device, args=args, clean_result=True)
                     print(f"Generated Response: {response}")
-                    model.train()  # switch back after eval in generate_responses
+                    model.train()
 
-        num_steps = len(dataloader)
-        avg_epoch_loss = epoch_loss / num_steps if num_steps > 0 else 0.0
-        print(f"Epoch {epoch+1} completed. Average Loss: {avg_epoch_loss:.4f}")
-        print(f"Epoch {epoch+1} duration: {time.time() - epoch_start:.0f} seconds")
+        # Epoch complete
+        epoch_duration = time.time() - epoch_start
+        epoch_times.append(epoch_duration)
+        num_steps = len(train_loader)
+        avg_train_loss = epoch_loss / num_steps if num_steps > 0 else 0.0
+
+        # Validation loss
+        if val_loader is not None:
+            val_loss = _evaluate(model, val_loader, device, use_amp)
+        else:
+            val_loss = avg_train_loss
+
+        # Print epoch summary
+        print(f"\n--- Epoch {epoch+1} Summary ---")
+        print(f"  Train Loss: {avg_train_loss:.4f}")
+        if val_loader is not None:
+            print(f"  Val Loss:   {val_loss:.4f}")
+        print(f"  Duration:   {_format_time(epoch_duration)}")
+
+        # Time estimate
+        avg_epoch_time = sum(epoch_times) / len(epoch_times)
+        if auto_stop:
+            # Estimate: at most (patience - epochs_without_improvement) more epochs if no improvement
+            estimated_remaining = patience - epochs_without_improvement
+            remaining_time = avg_epoch_time * estimated_remaining
+            print(f"  Est. time if no improvement: {_format_time(remaining_time)} ({estimated_remaining} epochs)")
+        else:
+            remaining_epochs = max_epochs - (epoch + 1)
+            remaining_time = avg_epoch_time * remaining_epochs
+            print(f"  Est. remaining: {_format_time(remaining_time)} ({remaining_epochs} epochs left)")
+
+        # Early stopping check
+        if auto_stop:
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_epoch = epoch + 1
+                epochs_without_improvement = 0
+                print(f"  >> New best! (val loss: {best_val_loss:.4f})")
+            else:
+                epochs_without_improvement += 1
+                print(f"  >> No improvement for {epochs_without_improvement}/{patience} epochs (best: {best_val_loss:.4f} at epoch {best_epoch})")
 
         _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_directory, epoch + 1)
 
+        # Stop if patience exceeded
+        if auto_stop and epochs_without_improvement >= patience:
+            print(f"\n** Auto-stopped: no improvement for {patience} epochs. Best was epoch {best_epoch} (val loss: {best_val_loss:.4f})")
+            print(f"** Your best checkpoint is already saved.")
+            break
+
     total_training_time = time.time() - training_start
-    print(f"Training completed in {total_training_time // 60:.0f} minutes and {total_training_time % 60:.0f} seconds.")
+    print(f"\nTraining completed in {_format_time(total_training_time)}.")
 
 
 def _save_checkpoint(model, tokenizer, optimizer, scheduler, scaler, model_directory: str,
@@ -473,8 +671,9 @@ def generate_responses(model, tokenizer, prompt_text: str,
     model.eval()
 
     formatted_prompt = format_prompt(prompt_text, start_token=tokenizer.bos_token, sep_token=tokenizer.sep_token)
-    input_ids = tokenizer.encode(formatted_prompt, return_tensors='pt').to(device)
-    attention_mask = (input_ids != tokenizer.pad_token_id).long().to(device)
+    encoded = tokenizer(formatted_prompt, return_tensors='pt')
+    input_ids = encoded['input_ids'].to(device)
+    attention_mask = encoded['attention_mask'].to(device)
 
     with torch.no_grad():
         output = model.generate(
