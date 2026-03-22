@@ -18,8 +18,16 @@ import pandas as pd
 import torch
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, Subset
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, get_linear_schedule_with_warmup
-from peft import LoraConfig, get_peft_model, PeftModel, TaskType, prepare_model_for_kbit_training
+from transformers import AutoModelForCausalLM, AutoTokenizer, get_linear_schedule_with_warmup
+from peft import LoraConfig, get_peft_model, PeftModel, TaskType
+
+try:
+    import bitsandbytes  # noqa: F401 — check the actual package exists
+    from transformers import BitsAndBytesConfig
+    from peft import prepare_model_for_kbit_training
+    HAS_BNB = True
+except ImportError:
+    HAS_BNB = False
 
 
 BASE_MODEL_NAME = "microsoft/phi-2"
@@ -270,8 +278,9 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
     if not check_base_model_exists(base_model_dir):
         raise FileNotFoundError(f"Base model not found at {base_model_dir}. Set download=True or provide the model.")
 
-    # Load base model — use 4-bit quantization for training to save VRAM
-    if for_training and device.type == "cuda":
+    # Load base model — use 4-bit quantization for training to save VRAM (if bitsandbytes installed)
+    if for_training and device.type == "cuda" and HAS_BNB:
+        print("Loading model with 4-bit quantization (QLoRA)...")
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -284,6 +293,14 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
             trust_remote_code=True
         )
         model = prepare_model_for_kbit_training(model)
+    elif for_training and device.type == "cuda" and not HAS_BNB:
+        print("Warning: bitsandbytes not installed. Loading in FP16 (uses more VRAM).")
+        print("  Install it for lower memory usage: pip install bitsandbytes")
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model_dir,
+            dtype=dtype,
+            trust_remote_code=True
+        )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             base_model_dir,
@@ -420,9 +437,11 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     print(f"Using device: {device}")
 
     ensure_tokens(model, tokenizer, special_tokens=SPECIAL_TOKENS)
-    if device.type != "cuda":
+    # Move to device — quantized models (BNB) are already on CUDA, so .to() is a no-op for them
+    try:
         model.to(device)
-    # model is already on device after quantized loading on CUDA
+    except Exception:
+        pass  # quantized models may refuse .to(), they're already on the right device
 
     # Gradient checkpointing: recomputes activations during backward pass instead of storing them
     # Uses less VRAM at the cost of ~20% slower training
@@ -505,7 +524,21 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     training_start = time.time()
     model.train()
 
+    current_batch_size = args["batch_size"]
+
     for epoch in range(start_epoch, max_epochs):
+        # Re-check VRAM each epoch and adjust batch size if needed
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+            free_vram = _get_free_vram_gb()
+            new_batch = _vram_to_batch_size(free_vram)
+            if new_batch != current_batch_size:
+                print(f"  [VRAM] {free_vram:.1f} GB free — adjusting batch_size {current_batch_size} -> {new_batch}")
+                current_batch_size = new_batch
+                train_loader = DataLoader(train_dataset, batch_size=current_batch_size, shuffle=True)
+                if val_loader is not None:
+                    val_loader = DataLoader(Subset(full_dataset, val_indices), batch_size=current_batch_size)
+
         epoch_loss = 0.0
         epoch_start = time.time()
 
@@ -516,21 +549,32 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
 
             optimizer.zero_grad()
 
-            if use_amp:
-                with torch.amp.autocast(device.type):
+            try:
+                if use_amp:
+                    with torch.amp.autocast(device.type):
+                        outputs = model(input_ids_batch, attention_mask=attention_mask_batch, labels=labels_batch)
+                        loss = outputs.loss
+                    scaler.scale(loss).backward()
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
                     outputs = model(input_ids_batch, attention_mask=attention_mask_batch, labels=labels_batch)
                     loss = outputs.loss
-                scaler.scale(loss).backward()
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                outputs = model(input_ids_batch, attention_mask=attention_mask_batch, labels=labels_batch)
-                loss = outputs.loss
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
-                optimizer.step()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    optimizer.step()
+            except torch.cuda.OutOfMemoryError:
+                # OOM: clear cache, halve batch size, rebuild dataloader, skip this step
+                torch.cuda.empty_cache()
+                current_batch_size = max(1, current_batch_size // 2)
+                print(f"\n  [OOM] Out of memory! Reducing batch_size to {current_batch_size}")
+                train_loader = DataLoader(train_dataset, batch_size=current_batch_size, shuffle=True)
+                if val_loader is not None:
+                    val_loader = DataLoader(Subset(full_dataset, val_indices), batch_size=current_batch_size)
+                optimizer.zero_grad()
+                continue
 
             scheduler.step()
 

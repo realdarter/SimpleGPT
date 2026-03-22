@@ -8,7 +8,7 @@ if __name__ == "__main__":
         # Training settings (batch_size, max_length, save_every, warmup auto-tuned from VRAM)
         learning_rate=2e-4,
         patience=3,
-        max_epochs=20,
+        max_epochs=15,
         # Generation settings (only matter when testing, not during training)
         temperature=0.8,
         top_k=60,
