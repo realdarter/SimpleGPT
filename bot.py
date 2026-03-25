@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import gc
+import hashlib
 import os
 import subprocess
 import sys
@@ -48,6 +49,33 @@ IMPORTANT_TRAIN_TOKENS = (
     "Traceback",
 )
 STREAM_SENTINEL = object()
+MODEL_IDLE_TIMEOUT_SEC = 3600  # 1 hour — unload model if no /ask in this time
+
+
+def _compute_model_hash(model_dir: str) -> str:
+    """Hash the adapter + config files to detect model changes (e.g. after training)."""
+    h = hashlib.sha256()
+    adapter_dir = os.path.join(model_dir, "lora_adapter")
+    base_dir = os.path.join(model_dir, "base_model")
+
+    # Hash adapter files if they exist, otherwise hash base config
+    target_dir = adapter_dir if os.path.isdir(adapter_dir) else base_dir
+    if not os.path.isdir(target_dir):
+        return "no_model"
+
+    for fname in sorted(os.listdir(target_dir)):
+        fpath = os.path.join(target_dir, fname)
+        if not os.path.isfile(fpath):
+            continue
+        # Hash weights + config, skip huge files byte-by-byte — use size+mtime as proxy
+        if fname.endswith((".safetensors", ".bin")):
+            stat = os.stat(fpath)
+            h.update(f"{fname}:{stat.st_size}:{stat.st_mtime_ns}".encode())
+        elif fname.endswith((".json", ".txt", ".model")):
+            with open(fpath, "rb") as f:
+                h.update(f.read())
+
+    return h.hexdigest()[:16]
 
 
 @dataclass(frozen=True)
@@ -65,6 +93,9 @@ class RuntimeState:
     device: Optional[Any] = None
     gen_args: Optional[dict[str, Any]] = None
     model_loaded_at: Optional[float] = None
+    model_hash: Optional[str] = None
+    last_ask_at: Optional[float] = None
+    idle_task: Optional[asyncio.Task] = None
 
     train_process: Optional[subprocess.Popen[str]] = None
     train_stream_task: Optional[asyncio.Task] = None
@@ -213,8 +244,16 @@ def _gpu_status_text() -> str:
 
 
 def _load_model_blocking() -> str:
-    if STATE.model is not None:
-        return f"Model already loaded on `{STATE.device}`."
+    current_hash = _compute_model_hash(CONFIG.model_dir)
+
+    # Already loaded and unchanged — skip
+    if STATE.model is not None and STATE.model_hash == current_hash:
+        return f"Model already loaded on `{STATE.device}` (hash `{current_hash}`)."
+
+    # Hash changed — unload old model first
+    if STATE.model is not None and STATE.model_hash != current_hash:
+        print(f"[Model] Hash changed: {STATE.model_hash} -> {current_hash}, reloading...")
+        _unload_model_blocking()
 
     model, tokenizer = load_model_and_tokenizer(CONFIG.model_dir, download=False)
     device = _get_device()
@@ -236,7 +275,8 @@ def _load_model_blocking() -> str:
         repetition_penalty=1.2,
     )
     STATE.model_loaded_at = time.time()
-    return f"Model loaded on `{device}`."
+    STATE.model_hash = current_hash
+    return f"Model loaded on `{device}` (hash `{current_hash}`)."
 
 
 def _unload_model_blocking() -> str:
@@ -252,6 +292,7 @@ def _unload_model_blocking() -> str:
     STATE.device = None
     STATE.gen_args = None
     STATE.model_loaded_at = None
+    STATE.model_hash = None
 
     gc.collect()
     if torch.cuda.is_available():
@@ -262,18 +303,61 @@ def _unload_model_blocking() -> str:
 
 async def _ensure_model_loaded() -> str:
     async with STATE.model_lock:
-        return await asyncio.to_thread(_load_model_blocking)
+        result = await asyncio.to_thread(_load_model_blocking)
+        _reset_idle_timer()
+        return result
 
 
 async def _reload_model() -> str:
     async with STATE.model_lock:
         await asyncio.to_thread(_unload_model_blocking)
-        return await asyncio.to_thread(_load_model_blocking)
+        result = await asyncio.to_thread(_load_model_blocking)
+        _reset_idle_timer()
+        return result
 
 
 async def _unload_model() -> str:
     async with STATE.model_lock:
+        _cancel_idle_timer()
         return await asyncio.to_thread(_unload_model_blocking)
+
+
+def _reset_idle_timer() -> None:
+    """Reset the 1-hour idle countdown. If no /ask within the timeout, unload the model."""
+    STATE.last_ask_at = time.time()
+    if STATE.idle_task is not None:
+        STATE.idle_task.cancel()
+    STATE.idle_task = asyncio.ensure_future(_idle_unload_watcher())
+
+
+def _cancel_idle_timer() -> None:
+    if STATE.idle_task is not None:
+        STATE.idle_task.cancel()
+        STATE.idle_task = None
+    STATE.last_ask_at = None
+
+
+async def _idle_unload_watcher() -> None:
+    """Background task: unloads the model after MODEL_IDLE_TIMEOUT_SEC of inactivity."""
+    try:
+        while True:
+            await asyncio.sleep(60)  # check every minute
+            if STATE.model is None or STATE.last_ask_at is None:
+                return
+            if _is_training():
+                continue  # don't unload during training
+            idle_sec = time.time() - STATE.last_ask_at
+            if idle_sec >= MODEL_IDLE_TIMEOUT_SEC:
+                print(f"[Idle] No /ask for {idle_sec:.0f}s — unloading model to save resources.")
+                async with STATE.model_lock:
+                    await asyncio.to_thread(_unload_model_blocking)
+                channel = await _resolve_channel(CONFIG.channel_id)
+                if channel is not None:
+                    with contextlib.suppress(discord.HTTPException):
+                        await channel.send("Model auto-unloaded after 1 hour idle. Next `/ask` will reload it.")
+                return
+    except asyncio.CancelledError:
+        return
 
 
 async def _generate_response(prompt: str) -> str:
@@ -462,9 +546,17 @@ async def cmd_ask(interaction: discord.Interaction, question: str) -> None:
     await interaction.response.defer(thinking=True)
 
     try:
+        # Check hash — auto-reload if model changed (e.g. after training)
         load_note = None
-        if STATE.model is None:
+        current_hash = _compute_model_hash(CONFIG.model_dir)
+        if STATE.model is None or STATE.model_hash != current_hash:
+            action = "Reloading (model updated)" if STATE.model is not None else "Loading model"
             load_note = await _ensure_model_loaded()
+            load_note = f"{action}... {load_note}"
+
+        # Track last usage for idle timeout
+        STATE.last_ask_at = time.time()
+        _reset_idle_timer()
 
         response = await _generate_response(question)
         response = response.strip() or "(empty response)"
@@ -536,9 +628,15 @@ async def cmd_status(interaction: discord.Interaction) -> None:
     parts = []
 
     if STATE.model is not None:
-        parts.append(f"**Model:** Loaded on `{STATE.device}` for {_format_duration(STATE.model_loaded_at)}")
+        idle_str = ""
+        if STATE.last_ask_at:
+            idle_sec = int(time.time() - STATE.last_ask_at)
+            remaining = max(0, MODEL_IDLE_TIMEOUT_SEC - idle_sec)
+            idle_str = f" | idle {idle_sec}s, auto-unload in {remaining // 60}m"
+        parts.append(f"**Model:** Loaded on `{STATE.device}` for {_format_duration(STATE.model_loaded_at)} (hash `{STATE.model_hash}`{idle_str})")
     else:
-        parts.append("**Model:** Not loaded")
+        disk_hash = _compute_model_hash(CONFIG.model_dir)
+        parts.append(f"**Model:** Not loaded (disk hash `{disk_hash}`)")
 
     if _is_training():
         process = STATE.train_process
