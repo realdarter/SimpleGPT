@@ -1,12 +1,5 @@
 """
-Coded By Goose
-Refactored by Assistant
-
-This module provides functions for:
-- File and CSV preparation
-- Tokenization and special token management
-- Model loading and downloading
-- Training and generating responses with Phi-2 (LoRA fine-tuning)
+SimpleGPT — Fine-tuning Phi-3.5 with LoRA for chat generation.
 """
 
 import json
@@ -39,7 +32,6 @@ try:
 except ImportError:
     HAS_BNB = False
 
-import discord_notify
 
 if torch.cuda.is_available():
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -66,7 +58,7 @@ def _recommended_attn_implementation() -> Optional[str]:
     return None
 
 
-#                      DATASET CLASS
+# --- Dataset ---
 
 class TokenDataset(Dataset):
     """Tokenizes once up front so the training loop does not keep redoing CPU work."""
@@ -228,7 +220,7 @@ class DynamicPaddingCollator:
         }
 
 
-#                      UTILITY FUNCTIONS
+# --- Utilities ---
 
 def ensure_file_exists(file_path: str, create_if_missing: bool = True) -> bool:
     dir_name = os.path.dirname(file_path)
@@ -519,7 +511,7 @@ def check_adapter_exists(adapter_path: str) -> bool:
     return has_config and has_weights
 
 
-#              TOKEN MANAGEMENT FUNCTIONS
+# --- Token Management ---
 
 def ensure_tokens(model, tokenizer, special_tokens: Dict[str, str] = SPECIAL_TOKENS) -> int:
     """Adds special tokens and resizes embeddings. Returns number of tokens added."""
@@ -538,7 +530,7 @@ def decode_data(tokenizer, token_ids: Union[List[int], torch.Tensor],
     return tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
 
 
-#         MODEL LOADING & DOWNLOADING FUNCTIONS
+# --- Model Loading ---
 
 def _get_device() -> torch.device:
     """Returns the best available device."""
@@ -836,7 +828,7 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
     return model, tokenizer
 
 
-#         TRAINING ARGUMENTS & PROGRESS FUNCTIONS
+# --- Training Arguments ---
 
 def create_args(num_epochs: int = 0, batch_size: int = 1, learning_rate: float = 2e-4,
                 save_every: int = 500, max_length: int = 512, max_new_tokens: int = 256,
@@ -1025,7 +1017,7 @@ def _generate_diagnostic_samples(model, tokenizer, sample_pairs: List[Dict[str, 
     _write_sample_records(log_paths, records)
 
 
-#                      TRAINING FUNCTION
+# --- Training ---
 
 def _evaluate(model, dataloader, device, use_amp, non_blocking: bool = False) -> float:
     """Run validation and return average loss."""
@@ -1063,9 +1055,14 @@ def _format_time(seconds: float) -> str:
         return f"{hours:.0f}h {mins:.0f}m"
 
 
-def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, Any]] = None) -> None:
+def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, Any]] = None,
+                on_event: Optional[callable] = None) -> None:
     if args is None:
         args = create_args()
+
+    def _emit(event_type: str, **kwargs):
+        if on_event is not None:
+            on_event(event_type, **kwargs)
 
     user_args = dict(args)
     _seed_everything(int(args.get("seed", 42)))
@@ -1376,9 +1373,8 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     if write_diagnostics:
         print(f"Diagnostics logs: {log_paths['run_dir']}")
 
-    discord_notify.notify_training_start(
-        model_directory, train_size, current_batch_size * grad_accum_steps, max_epochs, auto_stop
-    )
+    _emit("training_start", model_dir=model_directory, dataset_size=train_size,
+          batch_size=current_batch_size * grad_accum_steps, max_epochs=max_epochs, auto_stop=auto_stop)
 
     # Suppress scheduler ordering warning (harmless on first step with resume)
     warnings.filterwarnings("ignore", message=".*lr_scheduler.step.*optimizer.step.*")
@@ -1557,7 +1553,8 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                                      save_training_state=False,
                                      run_id=run_id,
                                      log_dir=log_paths.get("run_dir") if write_diagnostics else None)
-                    _sample_after_save(model, tokenizer, encoded_data, device, args, epoch + 1)
+                    _emit("checkpoint", epoch=epoch + 1)
+                    _sample_after_save(model, tokenizer, encoded_data, device, args, epoch + 1, _emit)
                     if write_diagnostics:
                         _append_jsonl(
                             log_paths["events"],
@@ -1577,11 +1574,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                         print(f"Prompt: {sample_prompt}")
                         response = generate_responses(model, tokenizer, sample_prompt, device=device, args=args, clean_result=True)
                         print(f"Generated Response: {response}")
-                        discord_notify.send(
-                            f"**Sample Generation** (Epoch {epoch+1}, Step {step})\n"
-                            f"**Prompt:** {sample_prompt}\n"
-                            f"**Response:** {response[:1500]}"
-                        )
+                        _emit("sample", epoch=epoch+1, step=step, prompt=sample_prompt, response=response[:1500])
                         if write_diagnostics:
                             _write_sample_records(
                                 log_paths,
@@ -1726,14 +1719,11 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                         },
                     )
 
-            discord_notify.notify_epoch(
-                epoch + 1, max_epochs, avg_train_loss,
-                val_loss=val_loss if val_loader is not None else None,
-                duration=_format_time(epoch_duration),
-                best=is_new_best
-            )
+            _emit("epoch_done", epoch=epoch+1, max_epochs=max_epochs, train_loss=avg_train_loss,
+                  val_loss=val_loss if val_loader is not None else None,
+                  duration=_format_time(epoch_duration), best=is_new_best)
 
-            _sample_after_save(model, tokenizer, encoded_data, device, args, epoch + 1)
+            _sample_after_save(model, tokenizer, encoded_data, device, args, epoch + 1, _emit)
             _save_checkpoint(model, optimizer, scheduler, scaler, model_directory, epoch + 1,
                              best_val_loss=best_val_loss, best_epoch=best_epoch,
                              epochs_without_improvement=epochs_without_improvement,
@@ -1742,6 +1732,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                              save_training_state=True,
                              run_id=run_id,
                              log_dir=log_paths.get("run_dir") if write_diagnostics else None)
+            _emit("checkpoint", epoch=epoch + 1)
 
             if write_diagnostics:
                 _write_json(
@@ -1797,9 +1788,8 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                             "log_dir": log_paths["run_dir"],
                         },
                     )
-                discord_notify.notify_training_done(
-                    _format_time(total_training_time), best_epoch, best_val_loss, stopped_early=True
-                )
+                _emit("training_done", total_time=_format_time(total_training_time),
+                      best_epoch=best_epoch, best_val_loss=best_val_loss, stopped_early=True)
                 break
 
             epoch += 1
@@ -1837,11 +1827,9 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                         "log_dir": log_paths["run_dir"],
                     },
                 )
-            discord_notify.notify_training_done(
-                _format_time(total_training_time),
-                best_epoch=best_epoch if auto_stop else None,
-                best_val_loss=best_val_loss if auto_stop and best_val_loss < float('inf') else None
-            )
+            _emit("training_done", total_time=_format_time(total_training_time),
+                  best_epoch=best_epoch if auto_stop else None,
+                  best_val_loss=best_val_loss if auto_stop and best_val_loss < float('inf') else None)
     except Exception as exc:
         if write_diagnostics:
             failure_record = {
@@ -1919,11 +1907,10 @@ def _save_checkpoint(model, optimizer, scheduler, scaler, model_directory: str,
 
     checkpoint_kind = "resume state + adapter" if save_training_state else "adapter only"
     print(f"Checkpoint saved (epoch {epoch}, {checkpoint_kind})")
-    discord_notify.notify_checkpoint(epoch)
 
 
-def _sample_after_save(model, tokenizer, encoded_data, device, args, epoch):
-    """Generate a response from a random training prompt and send it to Discord."""
+def _sample_after_save(model, tokenizer, encoded_data, device, args, epoch, _emit=None):
+    """Generate a response from a random training prompt."""
     original_use_cache = None
     was_training = bool(getattr(model, "training", False))
     try:
@@ -1958,7 +1945,8 @@ def _sample_after_save(model, tokenizer, encoded_data, device, args, epoch):
             f"> **Model:** {generated}"
         )
         print(f"\n{sample_text}\n")
-        discord_notify.send(sample_text)
+        if _emit is not None:
+            _emit("sample_after_epoch", epoch=epoch, prompt=prompt, expected=expected, generated=generated)
     except Exception as e:
         print(f"Warning: Post-save sample failed: {e}")
     finally:
@@ -1967,7 +1955,7 @@ def _sample_after_save(model, tokenizer, encoded_data, device, args, epoch):
         model.train(was_training)
 
 
-#                      CLEAN TEXT FUNCTION
+# --- Clean Text ---
 
 def clean_text(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
                eos_token: str = "", bos_token: str = "") -> str:
@@ -1991,7 +1979,7 @@ def clean_text(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
     return split_text
 
 
-#                 PROMPT & GENERATION FUNCTIONS
+# --- Prompt & Generation ---
 
 def format_prompt(prompt_text: str, start_token: str = SPECIAL_TOKENS["bos_token"],
                   sep_token: str = SPECIAL_TOKENS["sep_token"]) -> str:

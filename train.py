@@ -1,6 +1,43 @@
 from chat_gen import create_args, train_model
 import discord_notify
 
+
+def on_event(event_type, **kwargs):
+    """Forward training events to Discord."""
+    if event_type == "training_start":
+        discord_notify.notify_training_start(
+            kwargs["model_dir"], kwargs["dataset_size"],
+            kwargs["batch_size"], kwargs["max_epochs"], kwargs["auto_stop"]
+        )
+    elif event_type == "epoch_done":
+        discord_notify.notify_epoch(
+            kwargs["epoch"], kwargs["max_epochs"], kwargs["train_loss"],
+            val_loss=kwargs.get("val_loss"), duration=kwargs.get("duration"),
+            best=kwargs.get("best", False)
+        )
+    elif event_type == "training_done":
+        discord_notify.notify_training_done(
+            kwargs["total_time"], best_epoch=kwargs.get("best_epoch"),
+            best_val_loss=kwargs.get("best_val_loss"),
+            stopped_early=kwargs.get("stopped_early", False)
+        )
+    elif event_type == "sample":
+        discord_notify.send(
+            f"**Sample Generation** (Epoch {kwargs['epoch']}, Step {kwargs['step']})\n"
+            f"**Prompt:** {kwargs['prompt']}\n"
+            f"**Response:** {kwargs['response']}"
+        )
+    elif event_type == "sample_after_epoch":
+        discord_notify.send(
+            f"**Sample after epoch {kwargs['epoch']}**\n"
+            f"> **Prompt:** {kwargs['prompt']}\n"
+            f"> **Expected:** {kwargs['expected']}\n"
+            f"> **Model:** {kwargs['generated']}"
+        )
+    elif event_type == "checkpoint":
+        discord_notify.notify_checkpoint(kwargs.get("epoch", 0))
+
+
 if __name__ == "__main__":
     model_directory = 'checkpoint/run'
     csv_path = 'training_data.csv'
@@ -31,4 +68,4 @@ if __name__ == "__main__":
         enableSampleMode=False,
     )
 
-    train_model(model_directory, csv_path, args)
+    train_model(model_directory, csv_path, args, on_event=on_event)
