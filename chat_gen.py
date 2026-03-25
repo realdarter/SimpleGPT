@@ -1001,16 +1001,15 @@ def __print_training_progress__(epoch: int, num_epochs: int, step: int, steps_in
     steps_remaining = total_steps - steps_completed
     avg_time_per_step = elapsed_time / steps_completed if steps_completed else 0
     estimated_time_remaining = avg_time_per_step * steps_remaining
-    # Color the loss green if improving, yellow if stagnant, red if high
     loss_color = _C.GREEN if loss < avg_loss else _C.YELLOW if loss < avg_loss * 1.2 else _C.RED
     print(
-        f"{_C.BOLD}Epoch [{epoch+1}/{num_epochs}]{_C.RESET} "
+        f"Epoch [{epoch+1}/{num_epochs}] "
         f"Step [{step}/{steps_in_epoch}] "
         f"{loss_color}Loss: {loss:.4f}{_C.RESET} "
-        f"Avg: {avg_loss:.4f} "
-        f"{_C.DIM}LR: {lr:.2e} "
+        f"{_C.CYAN}Avg: {avg_loss:.4f}{_C.RESET} "
+        f"LR: {lr:.2e} "
         f"Elapsed: {_format_time(elapsed_time)} "
-        f"ETA: {_format_time(estimated_time_remaining)}{_C.RESET}"
+        f"ETA: {_format_time(estimated_time_remaining)}"
     )
 
 
