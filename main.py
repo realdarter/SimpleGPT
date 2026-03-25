@@ -1,15 +1,12 @@
 from chat_gen import (
-    create_args, generate_responses, load_model_and_tokenizer,
-    ensure_tokens, SPECIAL_TOKENS, _get_device
+    create_args, generate_responses, load_model_and_tokenizer, _get_device
 )
 
 if __name__ == "__main__":
-    model_path = 'checkpoint/run3'
+    model_path = 'checkpoint/run'
 
     model, tokenizer = load_model_and_tokenizer(model_path, download=False)
     device = _get_device()
-    ensure_tokens(model, tokenizer, special_tokens=SPECIAL_TOKENS)
-    model.to(device)
 
     args = create_args(
         max_length=512,
