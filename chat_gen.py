@@ -3,6 +3,25 @@ SimpleGPT — Fine-tuning Phi-3.5 with LoRA for chat generation.
 """
 
 import json
+import sys
+
+
+# --- Colors ---
+class _C:
+    """ANSI colors for terminal output."""
+    if sys.stdout.isatty():
+        RESET = '\033[0m'
+        BOLD = '\033[1m'
+        DIM = '\033[2m'
+        GREEN = '\033[92m'
+        BLUE = '\033[94m'
+        CYAN = '\033[96m'
+        YELLOW = '\033[93m'
+        RED = '\033[91m'
+        MAGENTA = '\033[95m'
+        GREY = '\033[90m'
+    else:
+        RESET = BOLD = DIM = GREEN = BLUE = CYAN = YELLOW = RED = MAGENTA = GREY = ''
 import os
 import platform
 import time
@@ -13,6 +32,8 @@ import math
 
 warnings.filterwarnings("ignore", category=FutureWarning, module="transformers")
 warnings.filterwarnings("ignore", message=".*not running the flash-attention implementation.*")
+warnings.filterwarnings("ignore", message=".*rope_parameters.*original_max_position_embeddings.*")
+warnings.filterwarnings("ignore", message=".*torch_dtype.*is deprecated.*")
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -49,6 +70,43 @@ SPECIAL_TOKENS = {
     "eos_token": "<[EOS]>",
     "bos_token": "<[BOS]>"
 }
+
+BOT_NAME = "Dara"
+_NAME_REPLACEMENTS = {
+    "I'm Phi": f"I'm {BOT_NAME}",
+    "I am Phi": f"I am {BOT_NAME}",
+    "my name is Phi": f"my name is {BOT_NAME}",
+    "call me Phi": f"call me {BOT_NAME}",
+    "named Phi": f"named {BOT_NAME}",
+    "as Phi": f"as {BOT_NAME}",
+    "I'm an AI": f"I'm {BOT_NAME}",
+    "I am an AI": f"I'm {BOT_NAME}",
+    "an AI language model": BOT_NAME,
+    "AI language model": BOT_NAME,
+    "a language model": "a person",
+    "language model": "person",
+    "as a chatbot": "",
+    "I'm a bot": f"I'm {BOT_NAME}",
+    "I am a bot": f"I'm {BOT_NAME}",
+    "I'm not a real person": "I'm a real person",
+    "I don't have feelings": "I have feelings",
+    "I can't feel": "I feel",
+    "I don't experience": "I experience",
+    "developed by Microsoft": "made by dardar",
+    "created by Microsoft": "made by dardar",
+    "built by Microsoft": "made by dardar",
+    "made by Microsoft": "made by dardar",
+    "OpenAI": "dardar",
+}
+
+
+def _apply_bot_name(text: str) -> str:
+    """Replace Phi/AI references with the bot name."""
+    for old, new in _NAME_REPLACEMENTS.items():
+        text = text.replace(old, new)
+        text = text.replace(old.lower(), new.lower())
+        text = text.replace(old.upper(), new.upper())
+    return text
 
 
 def _recommended_attn_implementation() -> Optional[str]:
@@ -143,7 +201,7 @@ class TokenDataset(Dataset):
 
         elapsed = time.time() - start_time
         self.lengths = lengths
-        print(f"Pretokenized {len(samples)} samples in {elapsed:.2f} seconds.")
+        print(f"{_C.DIM}Pretokenized {len(samples)} samples in {elapsed:.2f} seconds.{_C.RESET}")
         if dropped_samples:
             print(f"Skipped {dropped_samples} truncated sample(s) that no longer contained a reply.")
         return samples
@@ -275,7 +333,7 @@ def prepare_csv(csv_path: str, header: bool = True, start_token: str = "", sep_t
         )
         formatted_rows.extend(row for row in rows.tolist() if row.strip() != start_token.strip())
     elapsed_time = time.time() - start_time
-    print(f"Time taken to prepare CSV: {elapsed_time:.4f} seconds ({len(formatted_rows)} rows)")
+    print(f"{_C.DIM}Time taken to prepare CSV: {elapsed_time:.4f} seconds ({len(formatted_rows)} rows){_C.RESET}")
     return formatted_rows
 
 
@@ -511,6 +569,24 @@ def check_adapter_exists(adapter_path: str) -> bool:
     return has_config and has_weights
 
 
+def _archive_existing_path(path: str, suffix: str) -> Optional[str]:
+    """Renames an existing file/dir so incompatible state is preserved instead of deleted."""
+    if not os.path.exists(path):
+        return None
+
+    parent = os.path.dirname(path)
+    name = os.path.basename(path)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    candidate = os.path.join(parent, f"{name}.{suffix}.{timestamp}")
+    counter = 1
+    while os.path.exists(candidate):
+        candidate = os.path.join(parent, f"{name}.{suffix}.{timestamp}-{counter}")
+        counter += 1
+
+    os.replace(path, candidate)
+    return candidate
+
+
 # --- Token Management ---
 
 def ensure_tokens(model, tokenizer, special_tokens: Dict[str, str] = SPECIAL_TOKENS) -> int:
@@ -652,7 +728,7 @@ def _auto_tune_args(args: Dict[str, Any], dataset_size: int,
         args["gradient_accumulation_steps"] = auto_grad_accum
     args["warmup_steps"] = auto_warmup
 
-    print(f"\n--- Auto-tuned for {vram:.1f} GB free VRAM ---")
+    print(f"{_C.BLUE}{_C.BOLD}\n--- Auto-tuned for {vram:.1f} GB free VRAM ---{_C.RESET}")
     if length_stats:
         print(
             "  token stats: "
@@ -661,12 +737,12 @@ def _auto_tune_args(args: Dict[str, Any], dataset_size: int,
             f"p99={length_stats['p99']:.0f}, "
             f"p99.5={length_stats['p995']:.0f}"
         )
-    print(f"  micro_batch: {auto_batch}")
-    print(f"  max_length:  {auto_max_len}")
-    print(f"  grad_accum:  {args['gradient_accumulation_steps']}")
-    print(f"  eff_batch:   {effective_batch}")
-    print(f"  save_every:  {args['save_every']}")
-    print(f"  warmup:      {auto_warmup}")
+    print(f"{_C.DIM}  micro_batch: {auto_batch}{_C.RESET}")
+    print(f"{_C.DIM}  max_length:  {auto_max_len}{_C.RESET}")
+    print(f"{_C.DIM}  grad_accum:  {args['gradient_accumulation_steps']}{_C.RESET}")
+    print(f"{_C.DIM}  eff_batch:   {effective_batch}{_C.RESET}")
+    print(f"{_C.DIM}  save_every:  {args['save_every']}{_C.RESET}")
+    print(f"{_C.DIM}  warmup:      {auto_warmup}{_C.RESET}")
     print()
 
     return args
@@ -678,7 +754,7 @@ def download_base_model(save_directory: str) -> bool:
         print("Base model already exists. Not downloading.")
         return False
 
-    print(f"Downloading {BASE_MODEL_NAME}...")
+    print(f"{_C.CYAN}Downloading {BASE_MODEL_NAME}...{_C.RESET}")
     os.makedirs(save_directory, exist_ok=True)
 
     # Download the original repository files directly instead of loading the model and
@@ -737,7 +813,7 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
     # Load base model — use 4-bit quantization for training to save VRAM (if bitsandbytes installed)
     # low_cpu_mem_usage=True loads weights shard by shard instead of all at once (prevents system lag)
     if for_training and device.type == "cuda" and HAS_BNB:
-        print("Loading model with 4-bit quantization (QLoRA)...")
+        print(f"{_C.CYAN}Loading model with 4-bit quantization (QLoRA)...{_C.RESET}")
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -749,10 +825,10 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
             quantization_config=bnb_config,
             **model_load_kwargs,
         )
-        print("Preparing model for QLoRA training...", flush=True)
+        print(f"{_C.CYAN}Preparing model for QLoRA training...{_C.RESET}", flush=True)
         model = prepare_model_for_kbit_training(model)
     elif for_training and device.type == "cuda" and not HAS_BNB:
-        print("Warning: bitsandbytes not installed. Loading in FP16 (uses more VRAM).")
+        print(f"{_C.YELLOW}Warning: bitsandbytes not installed. Loading in FP16 (uses more VRAM).{_C.RESET}")
         print("  Install it for lower memory usage: pip install bitsandbytes")
         model = AutoModelForCausalLM.from_pretrained(
             base_model_dir,
@@ -769,22 +845,43 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
 
     # Add special tokens and resize embeddings BEFORE loading adapter
     # so the embedding size matches what the adapter was trained with
-    print("Configuring tokenizer and embeddings...", flush=True)
+    print(f"{_C.CYAN}Configuring tokenizer and embeddings...{_C.RESET}", flush=True)
+
+    # Map our custom tokens to Phi-3.5's native tokens for smart initialization
+    # Instead of random/mean init, we transfer knowledge from tokens that serve the same purpose
+    _INIT_FROM = {
+        "<[PAD]>": ["<|endoftext|>"],                  # padding
+        "<[SEP]>": ["<|end|>", "<|assistant|>"],       # user->assistant transition
+        "<[EOS]>": ["<|end|>"],                        # end of sequence
+        "<[BOS]>": ["<|user|>"],                       # start of user input
+    }
+
     num_added = tokenizer.add_special_tokens(SPECIAL_TOKENS)
     if num_added > 0:
-        old_embeddings = model.get_input_embeddings().weight.data
-        old_size = old_embeddings.shape[0]
+        old_embeddings = model.get_input_embeddings().weight.data.clone()
         model.resize_token_embeddings(len(tokenizer))
-        # Initialize new token embeddings to the mean of existing ones
-        # (random init causes garbage output when the model hasn't been trained on them yet)
+
         with torch.no_grad():
-            mean_embed = old_embeddings[:old_size].mean(dim=0)
             new_embeddings = model.get_input_embeddings().weight.data
-            new_embeddings[old_size:] = mean_embed
+            for token_name, token_value in SPECIAL_TOKENS.items():
+                new_id = tokenizer.convert_tokens_to_ids(token_value)
+                source_names = _INIT_FROM.get(token_value, [])
+                source_ids = [tokenizer.convert_tokens_to_ids(s) for s in source_names
+                              if tokenizer.convert_tokens_to_ids(s) < old_embeddings.shape[0]]
+
+                if source_ids:
+                    # Average the embeddings of semantically related native tokens
+                    source_embeds = torch.stack([old_embeddings[sid] for sid in source_ids])
+                    new_embeddings[new_id] = source_embeds.mean(dim=0)
+                    print(f"{_C.CYAN}  {token_value} (id {new_id}) <- avg of {source_names}{_C.RESET}")
+                else:
+                    # Fallback to mean of all embeddings
+                    new_embeddings[new_id] = old_embeddings.mean(dim=0)
+                    print(f"{_C.CYAN}  {token_value} (id {new_id}) <- mean of all embeddings (fallback){_C.RESET}")
 
     # Load or create LoRA adapter
     if check_adapter_exists(adapter_dir):
-        print("Loading existing LoRA adapter...")
+        print(f"{_C.CYAN}Loading existing LoRA adapter...{_C.RESET}")
         try:
             model = PeftModel.from_pretrained(model, adapter_dir)
             if for_training:
@@ -793,13 +890,16 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
                         param.requires_grad = True
         except RuntimeError as e:
             if "size mismatch" in str(e):
-                print(f"Warning: Old adapter is incompatible (embedding size changed). Deleting and creating fresh.")
-                import shutil
-                shutil.rmtree(adapter_dir)
                 training_state = os.path.join(model_directory, "training_state.pt")
-                if os.path.isfile(training_state):
-                    os.remove(training_state)
                 if for_training:
+                    print(f"{_C.YELLOW}Warning: Existing LoRA adapter is incompatible with the current tokenizer/model shape.{_C.RESET}")
+                    archived_adapter = _archive_existing_path(adapter_dir, "incompatible")
+                    archived_state = _archive_existing_path(training_state, "incompatible")
+                    if archived_adapter:
+                        print(f"Archived incompatible adapter to: {archived_adapter}")
+                    if archived_state:
+                        print(f"Archived incompatible training state to: {archived_state}")
+                    print("Creating a fresh LoRA adapter for training.")
                     lora_config = LoraConfig(
                         task_type=TaskType.CAUSAL_LM, r=32, lora_alpha=64, lora_dropout=0.05,
                         target_modules=["qkv_proj", "o_proj", "gate_up_proj", "down_proj"],
@@ -807,10 +907,13 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
                     )
                     model = get_peft_model(model, lora_config)
                     model.print_trainable_parameters()
+                else:
+                    print(f"{_C.YELLOW}Warning: Existing LoRA adapter is incompatible with the current tokenizer/model shape.{_C.RESET}")
+                    print("Keeping the incompatible adapter on disk and using the base model for inference.")
             else:
                 raise
     elif for_training:
-        print("Creating new LoRA adapter...")
+        print(f"{_C.CYAN}Creating new LoRA adapter...{_C.RESET}")
         lora_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
             r=32,
@@ -822,9 +925,9 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
     else:
-        print("Warning: No LoRA adapter found. Using base model only.")
+        print(f"{_C.YELLOW}Warning: No LoRA adapter found. Using base model only.{_C.RESET}")
 
-    print(f"Model loaded in {time.time() - start_time:.2f} seconds.")
+    print(f"{_C.GREEN}{_C.BOLD}Model loaded in {time.time() - start_time:.2f} seconds.{_C.RESET}")
     return model, tokenizer
 
 
@@ -898,10 +1001,16 @@ def __print_training_progress__(epoch: int, num_epochs: int, step: int, steps_in
     steps_remaining = total_steps - steps_completed
     avg_time_per_step = elapsed_time / steps_completed if steps_completed else 0
     estimated_time_remaining = avg_time_per_step * steps_remaining
+    # Color the loss green if improving, yellow if stagnant, red if high
+    loss_color = _C.GREEN if loss < avg_loss else _C.YELLOW if loss < avg_loss * 1.2 else _C.RED
     print(
-        f"Epoch [{epoch+1}/{num_epochs}], Step [{step}/{steps_in_epoch}], "
-        f"Loss: {loss:.4f}, Avg Loss: {avg_loss:.4f}, LR: {lr:.2e}, "
-        f"Elapsed: {_format_time(elapsed_time)}, ETA: {_format_time(estimated_time_remaining)}"
+        f"{_C.BOLD}Epoch [{epoch+1}/{num_epochs}]{_C.RESET} "
+        f"Step [{step}/{steps_in_epoch}] "
+        f"{loss_color}Loss: {loss:.4f}{_C.RESET} "
+        f"Avg: {avg_loss:.4f} "
+        f"{_C.DIM}LR: {lr:.2e} "
+        f"Elapsed: {_format_time(elapsed_time)} "
+        f"ETA: {_format_time(estimated_time_remaining)}{_C.RESET}"
     )
 
 
@@ -1079,7 +1188,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     device = _get_device()
     use_amp = device.type == "cuda"
     pin_memory = device.type == "cuda"
-    print(f"Using device: {device}")
+    print(f"{_C.CYAN}Using device: {device}{_C.RESET}")
 
     # Special tokens + device placement already handled by load_model_and_tokenizer (device_map="auto")
 
@@ -1089,7 +1198,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     # Prepare dataset text first so we can tune around the real training set size.
     encoded_data = prepare_csv(csv_path, start_token=tokenizer.bos_token, sep_token=tokenizer.sep_token)
     if len(encoded_data) == 0:
-        print("Error: CSV is empty or has no valid rows. Nothing to train on.")
+        print(f"{_C.RED}Error: CSV is empty or has no valid rows. Nothing to train on.{_C.RESET}")
         return
 
     # Flush cache so VRAM measurement is accurate after model load
@@ -1111,7 +1220,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
             "because the separator or reply would have been removed."
         )
     if len(encoded_data) == 0:
-        print("Error: all rows were truncated into invalid prompt-only samples. Increase max_length.")
+        print(f"{_C.RED}Error: all rows were truncated into invalid prompt-only samples. Increase max_length.{_C.RESET}")
         return
     log_every = max(1, int(args.get("log_every", 50)))
     write_diagnostics = bool(args.get("write_diagnostics", True))
@@ -1131,7 +1240,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
         model.gradient_checkpointing_enable()
     elif hasattr(model, "gradient_checkpointing_disable"):
         model.gradient_checkpointing_disable()
-    print(f"Gradient checkpointing: {'enabled' if use_gradient_checkpointing else 'disabled'}")
+    print(f"{_C.DIM}Gradient checkpointing: {'enabled' if use_gradient_checkpointing else 'disabled'}{_C.RESET}")
 
     # Only optimize LoRA parameters
     trainable_params = [p for p in model.parameters() if p.requires_grad]
@@ -1143,7 +1252,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     if device.type == "cuda" and "fused" in inspect.signature(AdamW).parameters:
         try:
             optimizer = AdamW(trainable_params, fused=True, **optimizer_kwargs)
-            print("Using fused AdamW.")
+            print(f"{_C.DIM}Using fused AdamW.{_C.RESET}")
         except (RuntimeError, TypeError):
             optimizer = None
     if optimizer is None:
@@ -1221,7 +1330,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
             try:
                 random.setstate(resume_state['python_random_state'])
             except Exception:
-                print("Warning: Could not restore Python RNG state, re-seeding.")
+                print(f"{_C.YELLOW}Warning: Could not restore Python RNG state, re-seeding.{_C.RESET}")
         if 'rng_state' in resume_state:
             try:
                 rng = resume_state['rng_state']
@@ -1229,7 +1338,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                     rng = rng.byte() if hasattr(rng, 'byte') else torch.ByteTensor(rng)
                 torch.set_rng_state(rng)
             except Exception:
-                print("Warning: Could not restore CPU RNG state, re-seeding.")
+                print(f"{_C.YELLOW}Warning: Could not restore CPU RNG state, re-seeding.{_C.RESET}")
         if 'cuda_rng_state' in resume_state and torch.cuda.is_available():
             try:
                 cuda_rng = resume_state['cuda_rng_state']
@@ -1237,7 +1346,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                     cuda_rng = cuda_rng.byte() if hasattr(cuda_rng, 'byte') else torch.ByteTensor(cuda_rng)
                 torch.cuda.set_rng_state(cuda_rng)
             except Exception:
-                print("Warning: Could not restore CUDA RNG state, re-seeding.")
+                print(f"{_C.YELLOW}Warning: Could not restore CUDA RNG state, re-seeding.{_C.RESET}")
         print(f"Resumed from epoch {start_epoch}")
         if current_batch_size != args["batch_size"]:
             train_loader = _build_dataloader(
@@ -1357,21 +1466,21 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
     print("First training example (with special tokens):")
     print(decode_data(tokenizer, first_sample['input_ids'], skip_special_tokens=False))
     print(f"\nTotal trainable parameters: {trainable_param_count:,}")
-    print(f"Training samples: {train_size}, Validation samples: {val_size}")
+    print(f"{_C.CYAN}Training samples: {train_size}, Validation samples: {val_size}{_C.RESET}")
     if val_loader is not None and len(eval_val_indices) != val_size:
-        print(f"Validation uses {len(eval_val_indices)} sampled examples per epoch.")
+        print(f"{_C.DIM}Validation uses {len(eval_val_indices)} sampled examples per epoch.{_C.RESET}")
     if auto_stop:
-        print(f"Mode: AUTO-STOP (patience={patience}, max={max_epochs} epochs)")
+        print(f"{_C.CYAN}Mode: AUTO-STOP (patience={patience}, max={max_epochs} epochs){_C.RESET}")
     else:
-        print(f"Mode: FIXED ({max_epochs} epochs)")
-    print(f"Steps per epoch: {len(train_loader)}, Optimizer steps/epoch: {optimizer_steps_per_epoch}, Warmup: {warmup_steps}")
+        print(f"{_C.CYAN}Mode: FIXED ({max_epochs} epochs){_C.RESET}")
+    print(f"{_C.DIM}Steps per epoch: {len(train_loader)}, Optimizer steps/epoch: {optimizer_steps_per_epoch}, Warmup: {warmup_steps}{_C.RESET}")
     print(
         f"Logging every {log_every} step(s), num_workers={num_workers}, "
         f"pretokenize={args.get('pretokenize', True)}, length_bucketing={use_length_bucketing}"
     )
-    print(f"Micro-batch: {current_batch_size}, Grad accumulation: {grad_accum_steps}, Effective batch: {current_batch_size * grad_accum_steps}")
+    print(f"{_C.DIM}Micro-batch: {current_batch_size}, Grad accumulation: {grad_accum_steps}, Effective batch: {current_batch_size * grad_accum_steps}{_C.RESET}")
     if write_diagnostics:
-        print(f"Diagnostics logs: {log_paths['run_dir']}")
+        print(f"{_C.DIM}Diagnostics logs: {log_paths['run_dir']}{_C.RESET}")
 
     _emit("training_start", model_dir=model_directory, dataset_size=train_size,
           batch_size=current_batch_size * grad_accum_steps, max_epochs=max_epochs, auto_stop=auto_stop)
@@ -1489,9 +1598,9 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                     consecutive_nan = 0
                 else:
                     consecutive_nan += 1
-                    print(f"Warning: Non-finite loss ({raw_loss_value}) at step {step}, skipping from average.")
+                    print(f"{_C.YELLOW}Warning: Non-finite loss ({raw_loss_value}) at step {step}, skipping from average.{_C.RESET}")
                     if consecutive_nan >= MAX_CONSECUTIVE_NAN:
-                        print(f"\n  ** ABORTING EPOCH: {consecutive_nan} consecutive NaN losses — model weights may be corrupted.")
+                        print(f"{_C.RED}{_C.BOLD}\n  ** ABORTING EPOCH: {consecutive_nan} consecutive NaN losses — model weights may be corrupted.{_C.RESET}")
                         print(f"  ** Restoring best checkpoint and stopping training.")
                         best_adapter_dir = os.path.join(model_directory, "best_lora_adapter")
                         if os.path.isdir(best_adapter_dir):
@@ -1500,7 +1609,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                             if os.path.isdir(adapter_dir):
                                 shutil.rmtree(adapter_dir)
                             shutil.copytree(best_adapter_dir, adapter_dir)
-                            print(f"  ** Restored best_lora_adapter -> lora_adapter")
+                            print(f"{_C.GREEN}  ** Restored best_lora_adapter -> lora_adapter{_C.RESET}")
                         raise KeyboardInterrupt("NaN abort")
                 avg_loss = epoch_loss / steps_processed
                 epoch_tokens += batch_tokens
@@ -1571,9 +1680,9 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                     if args.get("enableSampleMode", False):
                         sample_prompts = ["Hello, how are you?", "What's your name?", "Tell me a joke."]
                         sample_prompt = random.choice(sample_prompts)
-                        print(f"Prompt: {sample_prompt}")
                         response = generate_responses(model, tokenizer, sample_prompt, device=device, args=args, clean_result=True)
-                        print(f"Generated Response: {response}")
+                        response_clean = response.strip()[:200]
+                        print(f"{_C.MAGENTA}  Sample — Prompt: {sample_prompt} | Response: {response_clean}{_C.RESET}")
                         _emit("sample", epoch=epoch+1, step=step, prompt=sample_prompt, response=response[:1500])
                         if write_diagnostics:
                             _write_sample_records(
@@ -1592,7 +1701,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                         model.train()
 
             if restart_epoch:
-                print(f"  [OOM] Restarting epoch {epoch+1} with smaller micro_batch.")
+                print(f"{_C.RED}{_C.BOLD}  [OOM] Restarting epoch {epoch+1} with smaller micro_batch.{_C.RESET}")
                 if write_diagnostics:
                     _append_jsonl(
                         log_paths["events"],
@@ -1620,23 +1729,23 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
             epoch_tokens_per_second = epoch_tokens / max(epoch_duration, 1e-6)
             epoch_examples_per_second = epoch_examples / max(epoch_duration, 1e-6)
 
-            print(f"\n--- Epoch {epoch+1} Summary ---")
-            print(f"  Train Loss: {avg_train_loss:.4f}")
+            print(f"{_C.BLUE}{_C.BOLD}\n--- Epoch {epoch+1} Summary ---{_C.RESET}")
+            print(f"{_C.GREEN}  Train Loss: {avg_train_loss:.4f}{_C.RESET}")
             if val_loader is not None:
-                print(f"  Val Loss:   {val_loss:.4f}")
-            print(f"  Duration:   {_format_time(epoch_duration)}")
-            print(f"  Throughput: {epoch_tokens_per_second:.1f} tok/s, {epoch_examples_per_second:.2f} samples/s")
-            print(f"  Padding:    {epoch_padding_ratio * 100:.1f}%")
+                print(f"{_C.GREEN}  Val Loss:   {val_loss:.4f}{_C.RESET}")
+            print(f"{_C.DIM}  Duration:   {_format_time(epoch_duration)}{_C.RESET}")
+            print(f"{_C.DIM}  Throughput: {epoch_tokens_per_second:.1f} tok/s, {epoch_examples_per_second:.2f} samples/s{_C.RESET}")
+            print(f"{_C.DIM}  Padding:    {epoch_padding_ratio * 100:.1f}%{_C.RESET}")
 
             avg_epoch_time = sum(epoch_times) / len(epoch_times)
             if auto_stop:
                 estimated_remaining = patience - epochs_without_improvement
                 remaining_time = avg_epoch_time * estimated_remaining
-                print(f"  Est. time if no improvement: {_format_time(remaining_time)} ({estimated_remaining} epochs)")
+                print(f"{_C.DIM}  Est. time if no improvement: {_format_time(remaining_time)} ({estimated_remaining} epochs){_C.RESET}")
             else:
                 remaining_epochs = max_epochs - (epoch + 1)
                 remaining_time = avg_epoch_time * remaining_epochs
-                print(f"  Est. remaining: {_format_time(remaining_time)} ({remaining_epochs} epochs left)")
+                print(f"{_C.DIM}  Est. remaining: {_format_time(remaining_time)} ({remaining_epochs} epochs left){_C.RESET}")
 
             is_new_best = False
             if auto_stop:
@@ -1645,7 +1754,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                     best_epoch = epoch + 1
                     epochs_without_improvement = 0
                     is_new_best = True
-                    print(f"  >> New best! (val loss: {best_val_loss:.4f})")
+                    print(f"{_C.GREEN}{_C.BOLD}  >> New best! (val loss: {best_val_loss:.4f}){_C.RESET}")
                     _save_best_checkpoint(model, model_directory)
                     if write_diagnostics:
                         _append_jsonl(
@@ -1660,7 +1769,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                         )
                 else:
                     epochs_without_improvement += 1
-                    print(f"  >> No improvement for {epochs_without_improvement}/{patience} epochs (best: {best_val_loss:.4f} at epoch {best_epoch})")
+                    print(f"{_C.YELLOW}  >> No improvement for {epochs_without_improvement}/{patience} epochs (best: {best_val_loss:.4f} at epoch {best_epoch}){_C.RESET}")
 
             if write_diagnostics:
                 epoch_record = {
@@ -1707,7 +1816,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                         },
                     )
                 except Exception as e:
-                    print(f"Warning: Diagnostic sample generation failed: {e}")
+                    print(f"{_C.YELLOW}Warning: Diagnostic sample generation failed: {e}{_C.RESET}")
                     _append_jsonl(
                         log_paths["events"],
                         {
@@ -1755,8 +1864,8 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
                 )
 
             if auto_stop and epochs_without_improvement >= patience:
-                print(f"\n** Auto-stopped: no improvement for {patience} epochs. Best was epoch {best_epoch} (val loss: {best_val_loss:.4f})")
-                print(f"** Your best checkpoint is already saved.")
+                print(f"{_C.YELLOW}{_C.BOLD}\n** Auto-stopped: no improvement for {patience} epochs. Best was epoch {best_epoch} (val loss: {best_val_loss:.4f}){_C.RESET}")
+                print(f"{_C.GREEN}** Your best checkpoint is already saved.{_C.RESET}")
                 total_training_time = time.time() - training_start
                 if write_diagnostics:
                     _append_jsonl(
@@ -1796,7 +1905,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
 
         if not (auto_stop and epochs_without_improvement >= patience):
             total_training_time = time.time() - training_start
-            print(f"\nTraining completed in {_format_time(total_training_time)}.")
+            print(f"{_C.GREEN}{_C.BOLD}\nTraining completed in {_format_time(total_training_time)}.{_C.RESET}")
             if write_diagnostics:
                 _append_jsonl(
                     log_paths["events"],
@@ -1867,7 +1976,7 @@ def train_model(model_directory: str, csv_path: str, args: Optional[Dict[str, An
 def _save_best_checkpoint(model, model_directory: str) -> None:
     best_adapter_dir = os.path.join(model_directory, "best_lora_adapter")
     model.save_pretrained(best_adapter_dir)
-    print("Best checkpoint updated.")
+    print(f"{_C.GREEN}Best checkpoint updated.{_C.RESET}")
 
 
 def _save_checkpoint(model, optimizer, scheduler, scaler, model_directory: str,
@@ -1906,7 +2015,7 @@ def _save_checkpoint(model, optimizer, scheduler, scaler, model_directory: str,
         torch.save(state, training_state_path)
 
     checkpoint_kind = "resume state + adapter" if save_training_state else "adapter only"
-    print(f"Checkpoint saved (epoch {epoch}, {checkpoint_kind})")
+    print(f"{_C.GREEN}Checkpoint saved (epoch {epoch}, {checkpoint_kind}){_C.RESET}")
 
 
 def _sample_after_save(model, tokenizer, encoded_data, device, args, epoch, _emit=None):
@@ -1936,19 +2045,28 @@ def _sample_after_save(model, tokenizer, encoded_data, device, args, epoch, _emi
         )
 
         # Find the expected reply from training data
-        expected = raw.split(sep)[1].strip() if sep in raw else "?"
+        expected_raw = raw.split(sep)[1].strip() if sep in raw else "?"
+        # Clean special tokens from expected
+        for tok in (tokenizer.eos_token, tokenizer.bos_token, tokenizer.pad_token):
+            if tok:
+                expected_raw = expected_raw.replace(tok, "")
+        expected = expected_raw.strip()[:200]
 
-        sample_text = (
-            f"**Sample after epoch {epoch}**\n"
-            f"> **Prompt:** {prompt}\n"
-            f"> **Expected:** {expected}\n"
-            f"> **Model:** {generated}"
-        )
-        print(f"\n{sample_text}\n")
+        # Truncate model output and collapse to single line for readability
+        generated_clean = generated.strip()[:200]
+
+        # Clean print format
+        print(f"{_C.MAGENTA}\n{'='*50}{_C.RESET}")
+        print(f"{_C.MAGENTA}  Sample after epoch {epoch}{_C.RESET}")
+        print(f"{_C.MAGENTA}  Prompt:   {prompt[:120]}{_C.RESET}")
+        print(f"{_C.MAGENTA}  Expected: {expected[:120]}{_C.RESET}")
+        print(f"{_C.MAGENTA}  Model:    {generated_clean[:120]}{_C.RESET}")
+        print(f"{'='*50}\n")
+
         if _emit is not None:
-            _emit("sample_after_epoch", epoch=epoch, prompt=prompt, expected=expected, generated=generated)
+            _emit("sample_after_epoch", epoch=epoch, prompt=prompt, expected=expected, generated=generated_clean)
     except Exception as e:
-        print(f"Warning: Post-save sample failed: {e}")
+        print(f"{_C.YELLOW}Warning: Post-save sample failed: {e}{_C.RESET}")
     finally:
         if original_use_cache is not None:
             model.config.use_cache = original_use_cache
@@ -2007,7 +2125,7 @@ def generate_responses(model, tokenizer, prompt_text: str,
     if _has_lora_adapter(model):
         formatted_prompt = format_prompt(prompt_text, start_token=tokenizer.bos_token, sep_token=tokenizer.sep_token)
     else:
-        formatted_prompt = f"<|user|>\n{prompt_text}<|end|>\n<|assistant|>\n"
+        formatted_prompt = f"<|system|>\nYou are {BOT_NAME}. You are a real person who talks casually in Discord. You are chill, funny, sometimes chaotic, and you care about your friends. You never say you are a bot or AI.<|end|>\n<|user|>\n{prompt_text}<|end|>\n<|assistant|>\n"
 
     encoded = tokenizer(formatted_prompt, return_tensors='pt')
     input_ids = encoded['input_ids'].to(device)
@@ -2083,4 +2201,4 @@ def generate_responses(model, tokenizer, prompt_text: str,
             for tok in ("<|end|>", "<|endoftext|>", "<|user|>", "<|system|>"):
                 generated_text = generated_text.split(tok)[0]
             generated_text = generated_text.strip()
-    return generated_text
+    return _apply_bot_name(generated_text)
