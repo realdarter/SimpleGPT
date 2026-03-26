@@ -256,13 +256,29 @@ def _load_model_blocking() -> str:
         print(f"[Model] Hash changed: {STATE.model_hash} -> {current_hash}, reloading...")
         _unload_model_blocking()
 
-    model, tokenizer = load_model_and_tokenizer(CONFIG.model_dir, download=False)
+    try:
+        model, tokenizer = load_model_and_tokenizer(CONFIG.model_dir, download=False)
+    except FileNotFoundError as exc:
+        base_model_dir = os.path.join(CONFIG.model_dir, "base_model")
+        if os.path.isdir(base_model_dir):
+            raise
+        print(f"[Model] Base model missing at {base_model_dir}, attempting download...")
+        try:
+            model, tokenizer = load_model_and_tokenizer(CONFIG.model_dir, download=True)
+        except Exception as download_exc:
+            raise FileNotFoundError(
+                f"Base model missing at {base_model_dir} and automatic download failed. "
+                f"Restore the model files there or let the bot download them. "
+                f"Original error: {exc}. Download error: {download_exc}"
+            ) from download_exc
     device = _get_device()
 
     try:
         model.to(device)
     except Exception:
         pass
+
+    current_hash = _compute_model_hash(CONFIG.model_dir)
 
     STATE.model = model
     STATE.tokenizer = tokenizer

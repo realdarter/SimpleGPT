@@ -60,6 +60,7 @@ if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = True
     if hasattr(torch, "set_float32_matmul_precision"):
         torch.set_float32_matmul_precision("high")
+    torch.cuda.set_per_process_memory_fraction(0.8)  # Cap VRAM at 80% — leaves room for Windows
 
 
 BASE_MODEL_NAME = "microsoft/Phi-3.5-mini-instruct"
@@ -622,7 +623,7 @@ def _get_dtype(device: torch.device) -> torch.dtype:
     return torch.float32
 
 
-VRAM_RESERVE_FRACTION = 0.10  # always keep 10% VRAM free for the OS/other apps
+VRAM_RESERVE_FRACTION = 0.20  # keep 20% VRAM free — prevents system lag on single-GPU Windows
 
 
 def _get_free_vram_gb() -> float:
@@ -794,6 +795,7 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
 
     base_model_dir = os.path.join(model_directory, "base_model")
     adapter_dir = os.path.join(model_directory, "lora_adapter")
+    best_adapter_dir = os.path.join(model_directory, "best_lora_adapter")
 
     # Download base model if needed
     if not check_base_model_exists(base_model_dir) and download:
@@ -880,10 +882,15 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
                     print(f"{_C.CYAN}  {token_value} (id {new_id}) <- mean of all embeddings (fallback){_C.RESET}")
 
     # Load or create LoRA adapter
-    if check_adapter_exists(adapter_dir):
-        print(f"{_C.CYAN}Loading existing LoRA adapter...{_C.RESET}")
+    inference_adapter_dir = adapter_dir
+    if not for_training and check_adapter_exists(best_adapter_dir):
+        inference_adapter_dir = best_adapter_dir
+
+    if check_adapter_exists(inference_adapter_dir):
+        adapter_label = os.path.basename(inference_adapter_dir)
+        print(f"{_C.CYAN}Loading existing LoRA adapter from {adapter_label}...{_C.RESET}")
         try:
-            model = PeftModel.from_pretrained(model, adapter_dir)
+            model = PeftModel.from_pretrained(model, inference_adapter_dir)
             if for_training:
                 for name, param in model.named_parameters():
                     if "lora_" in name:
@@ -952,7 +959,8 @@ def create_args(num_epochs: int = 0, batch_size: int = 1, learning_rate: float =
                 sample_preview_count: int = 3,
                 sample_log_every_epochs: int = 1,
                 sample_max_new_tokens: int = 96,
-                max_newlines: int = 2) -> Dict[str, Any]:
+                max_newlines: int = 2,
+                gpu_throttle: float = 0.0) -> Dict[str, Any]:
     """
     num_epochs: 0 = auto-stop (default), any positive number = fixed epochs.
     patience: how many epochs without improvement before auto-stopping.
@@ -992,6 +1000,7 @@ def create_args(num_epochs: int = 0, batch_size: int = 1, learning_rate: float =
         "sample_log_every_epochs": sample_log_every_epochs,
         "sample_max_new_tokens": sample_max_new_tokens,
         "max_newlines": max_newlines,
+        "gpu_throttle": gpu_throttle,
     }
 
 
@@ -2203,8 +2212,8 @@ def generate_responses(model, tokenizer, prompt_text: str,
     if device is None:
         device = _get_device()
 
-    # Auto-correct input typos before generation
-    if args.get("auto_correct_input", True):
+    # Auto-correct input typos before generation (skip during training)
+    if args.get("auto_correct_input", True) and not getattr(model, "training", False):
         prompt_text = _correct_input(prompt_text)
 
     was_training = bool(getattr(model, "training", False))
