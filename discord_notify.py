@@ -19,15 +19,22 @@ def _read_token():
     global _TOKEN_CACHE
     if _TOKEN_CACHE is not None:
         return _TOKEN_CACHE
-    auth_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth.txt")
-    if not os.path.isfile(auth_path):
-        return None
-    with open(auth_path, "r", encoding="utf-8") as f:
-        token = f.read().strip()
-    if not token.startswith("Bot "):
-        token = f"Bot {token}"
-    _TOKEN_CACHE = token
-    return _TOKEN_CACHE
+
+    # Try multiple locations for auth.txt
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth.txt"),
+        os.path.join(os.getcwd(), "auth.txt"),
+    ]
+    for auth_path in candidates:
+        if os.path.isfile(auth_path):
+            with open(auth_path, "r", encoding="utf-8-sig") as f:
+                token = f.read().strip()
+            if token:
+                if not token.startswith("Bot "):
+                    token = f"Bot {token}"
+                _TOKEN_CACHE = token
+                return _TOKEN_CACHE
+    return None
 
 
 def _get_headers(token):
@@ -37,7 +44,7 @@ def _get_headers(token):
     }
 
 
-def send(message: str) -> bool:
+def send(message: str, retries: int = 3) -> bool:
     """Send a message to the training notifications channel. Returns True on success."""
     if requests is None:
         print("[Discord] requests is not installed; notifications are disabled.")
@@ -45,24 +52,38 @@ def send(message: str) -> bool:
 
     token = _read_token()
     if token is None:
+        print("[Discord] No token found in auth.txt")
         return False
 
     payload = {
-        "content": message,
+        "content": message[:2000],  # Discord limit
         "tts": False,
     }
-    try:
-        response = requests.post(
-            f"https://discord.com/api/v10/channels/{DISCORD_CHANNEL_ID}/messages",
-            headers=_get_headers(token),
-            json=payload
-        )
-        if response.status_code not in (200, 201):
+
+    import time as _time
+    for attempt in range(retries):
+        try:
+            response = requests.post(
+                f"https://discord.com/api/v10/channels/{DISCORD_CHANNEL_ID}/messages",
+                headers=_get_headers(token),
+                json=payload,
+                timeout=10,
+            )
+            if response.status_code in (200, 201):
+                return True
+            if response.status_code == 429:
+                # Rate limited — wait and retry
+                retry_after = response.json().get("retry_after", 2)
+                print(f"[Discord] Rate limited, waiting {retry_after}s...")
+                _time.sleep(retry_after)
+                continue
             print(f"[Discord] Error {response.status_code}: {response.text[:200]}")
-        return response.status_code in (200, 201)
-    except requests.exceptions.RequestException as exc:
-        print(f"[Discord] Request failed: {exc}")
-        return False
+            return False
+        except requests.exceptions.RequestException as exc:
+            print(f"[Discord] Request failed (attempt {attempt + 1}/{retries}): {exc}")
+            if attempt < retries - 1:
+                _time.sleep(2)
+    return False
 
 
 def notify_checkpoint(epoch: int, train_loss: float = None, val_loss: float = None,

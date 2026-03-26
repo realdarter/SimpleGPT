@@ -14,7 +14,7 @@ if __name__ == "__main__":
         temperature=0.8,
         top_k=60,
         top_p=0.92,
-        repetition_penalty=1.3
+        repetition_penalty=1.3,
     )
 
     while True:

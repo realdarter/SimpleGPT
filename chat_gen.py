@@ -2128,6 +2128,73 @@ def _has_lora_adapter(model) -> bool:
     return isinstance(model, PeftModel)
 
 
+_INPUT_VOCAB = None
+
+def _build_input_vocab():
+    """Build a set of known words from training data for input correction."""
+    global _INPUT_VOCAB
+    if _INPUT_VOCAB is not None:
+        return _INPUT_VOCAB
+
+    vocab = set()
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "training_data.csv")
+    if os.path.isfile(csv_path):
+        try:
+            import csv as _csv
+            with open(csv_path, 'r', encoding='utf-8', errors='replace') as f:
+                reader = _csv.reader(f)
+                next(reader, None)
+                for row in reader:
+                    for field in row:
+                        for word in re.split(r'[^a-zA-Z]+', field.lower()):
+                            if len(word) > 1:
+                                vocab.add(word)
+        except Exception:
+            pass
+    _INPUT_VOCAB = vocab
+    return vocab
+
+
+def _correct_input(text: str) -> str:
+    """Auto-correct user input using fuzzy matching against training vocabulary.
+    Only corrects words that aren't in the training data or dictionary.
+    Fast — uses edit distance 1 only."""
+    try:
+        from spellchecker import SpellChecker
+    except ImportError:
+        return text
+
+    vocab = _build_input_vocab()
+    spell = SpellChecker()
+    # Add our training vocab as known words
+    spell.word_frequency.load_words(vocab)
+
+    words = text.split()
+    corrected = []
+    for word in words:
+        clean = word.lower().strip('.,!?;:\'"()-')
+        # Skip short words, numbers, URLs, mentions
+        if len(clean) <= 2 or clean.isdigit() or word.startswith(('http', '@', '#', '/')):
+            corrected.append(word)
+            continue
+        # Already known — keep as-is
+        if clean in spell or clean in vocab:
+            corrected.append(word)
+            continue
+        # Try to correct
+        correction = spell.correction(clean)
+        if correction and correction != clean:
+            # Preserve original case
+            if word[0].isupper():
+                correction = correction[0].upper() + correction[1:]
+            if word.isupper():
+                correction = correction.upper()
+            corrected.append(correction)
+        else:
+            corrected.append(word)
+    return ' '.join(corrected)
+
+
 def generate_responses(model, tokenizer, prompt_text: str,
                        device: Optional[torch.device] = None,
                        args: Optional[Dict[str, Any]] = None, clean_result: bool = False) -> str:
@@ -2135,6 +2202,10 @@ def generate_responses(model, tokenizer, prompt_text: str,
         args = create_args()
     if device is None:
         device = _get_device()
+
+    # Auto-correct input typos before generation
+    if args.get("auto_correct_input", True):
+        prompt_text = _correct_input(prompt_text)
 
     was_training = bool(getattr(model, "training", False))
     model.eval()
