@@ -49,9 +49,9 @@ if __name__ == "__main__":
     args = create_args(
         # Training settings (batch_size, max_length, warmup auto-tuned from VRAM)
         save_every=5000,
-        learning_rate=2e-4,
-        patience=3,
-        max_epochs=15,
+        learning_rate=1e-4,
+        patience=2,
+        max_epochs=5,
         max_length=256,
         log_every=25,
         target_effective_batch_size=32,
@@ -59,12 +59,12 @@ if __name__ == "__main__":
         write_diagnostics=True,
         sample_preview_count=3,
         sample_log_every_epochs=1,
-        sample_max_new_tokens=96,
+        sample_max_new_tokens=60,
         # Generation settings (only matter when testing, not during training)
         temperature=0.8,
         top_k=60,
         top_p=0.92,
-        repetition_penalty=1.2,
+        repetition_penalty=1.3,
         enableSampleMode=False,
     )
 

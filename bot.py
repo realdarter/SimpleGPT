@@ -49,7 +49,7 @@ IMPORTANT_TRAIN_TOKENS = (
     "Traceback",
 )
 STREAM_SENTINEL = object()
-MODEL_IDLE_TIMEOUT_SEC = 3600  # 1 hour — unload model if no /ask in this time
+MODEL_IDLE_TIMEOUT_SEC = 1200  # 20 mins — unload model if no /ask in this time
 
 
 def _compute_model_hash(model_dir: str) -> str:
@@ -102,6 +102,7 @@ class RuntimeState:
     training_started_at: Optional[float] = None
     training_channel_id: Optional[int] = None
     train_tail: Deque[str] = field(default_factory=lambda: deque(maxlen=200))
+    train_status_msg: Optional[Any] = None  # Discord message to edit in-place
 
     model_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     inference_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -269,10 +270,11 @@ def _load_model_blocking() -> str:
     STATE.gen_args = create_args(
         max_length=512,
         max_new_tokens=256,
+        max_newlines=2,
         temperature=0.8,
         top_k=60,
         top_p=0.92,
-        repetition_penalty=1.2,
+        repetition_penalty=1.3,
     )
     STATE.model_loaded_at = time.time()
     STATE.model_hash = current_hash
@@ -341,11 +343,11 @@ async def _idle_unload_watcher() -> None:
     """Background task: unloads the model after MODEL_IDLE_TIMEOUT_SEC of inactivity."""
     try:
         while True:
-            await asyncio.sleep(60)  # check every minute
+            await asyncio.sleep(60)
             if STATE.model is None or STATE.last_ask_at is None:
                 return
             if _is_training():
-                continue  # don't unload during training
+                continue
             idle_sec = time.time() - STATE.last_ask_at
             if idle_sec >= MODEL_IDLE_TIMEOUT_SEC:
                 print(f"[Idle] No /ask for {idle_sec:.0f}s — unloading model to save resources.")
@@ -354,10 +356,13 @@ async def _idle_unload_watcher() -> None:
                 channel = await _resolve_channel(CONFIG.channel_id)
                 if channel is not None:
                     with contextlib.suppress(discord.HTTPException):
-                        await channel.send("Model auto-unloaded after 1 hour idle. Next `/ask` will reload it.")
+                        await channel.send("Model auto-unloaded after 20 min idle. Next `/ask` will reload it.")
                 return
     except asyncio.CancelledError:
         return
+    except Exception as e:
+        print(f"[Idle Watcher Error] {e}")
+        traceback.print_exc()
 
 
 async def _generate_response(prompt: str) -> str:
@@ -391,14 +396,27 @@ def _pump_process_output(process: subprocess.Popen[str], loop: asyncio.AbstractE
         loop.call_soon_threadsafe(queue.put_nowait, STREAM_SENTINEL)
 
 
-async def _flush_train_lines(channel, lines: list[str], *, header: str = "") -> None:
+async def _update_train_status(channel, lines: list[str]) -> None:
+    """Edit the single training status message. Never sends new messages."""
     if channel is None or not lines:
         return
 
     excerpt = _format_train_excerpt(lines)
     if not excerpt.strip():
         return
-    await _send_text_chunks(channel, excerpt, code_block=True, prefix=header)
+
+    content = f"```\n{_escape_code_block(excerpt)}\n```"
+    if len(content) > DISCORD_MESSAGE_LIMIT:
+        content = content[:DISCORD_MESSAGE_LIMIT - 3] + "```"
+
+    try:
+        if STATE.train_status_msg is not None:
+            await STATE.train_status_msg.edit(content=content)
+        else:
+            STATE.train_status_msg = await channel.send(content)
+    except (discord.NotFound, discord.HTTPException):
+        with contextlib.suppress(discord.HTTPException):
+            STATE.train_status_msg = await channel.send(content)
 
 
 async def _stream_train_output(process: subprocess.Popen[str], channel_id: int) -> None:
@@ -426,19 +444,14 @@ async def _stream_train_output(process: subprocess.Popen[str], channel_id: int) 
                 STATE.train_tail.append(item)
                 print(item)
 
-                if any(token in item for token in IMPORTANT_TRAIN_TOKENS):
-                    await _flush_train_lines(channel, pending_lines)
-                    pending_lines.clear()
-                    last_flush = time.monotonic()
-                    continue
-
+            # Always edit the same message
             if pending_lines and (time.monotonic() - last_flush) >= TRAIN_LOG_INTERVAL_SEC:
-                await _flush_train_lines(channel, pending_lines)
+                await _update_train_status(channel, pending_lines)
                 pending_lines.clear()
                 last_flush = time.monotonic()
 
         if pending_lines:
-            await _flush_train_lines(channel, pending_lines)
+            await _update_train_status(channel, pending_lines)
 
         with contextlib.suppress(subprocess.TimeoutExpired):
             await asyncio.to_thread(process.wait, timeout=2)
@@ -454,16 +467,22 @@ async def _stream_train_output(process: subprocess.Popen[str], channel_id: int) 
                 STATE.training_started_at = None
                 STATE.training_channel_id = None
 
+        # Final message — edit the status msg one last time
         if channel is not None:
             summary = (
-                f"**Training finished** with exit code `{exit_code}`.\n"
+                f"**Training finished** with exit code `{exit_code}`."
                 if exit_code is not None
-                else "**Training finished.**\n"
+                else "**Training finished.**"
             )
-            if final_tail:
-                await _send_text_chunks(channel, _format_train_excerpt(final_tail), code_block=True, prefix=summary)
-            else:
-                await channel.send(summary)
+            try:
+                if STATE.train_status_msg is not None:
+                    await STATE.train_status_msg.edit(content=summary)
+                else:
+                    await channel.send(summary)
+            except (discord.NotFound, discord.HTTPException):
+                with contextlib.suppress(discord.HTTPException):
+                    await channel.send(summary)
+            STATE.train_status_msg = None
 
 
 async def _start_training(channel_id: int) -> tuple[str, bool]:
@@ -531,7 +550,12 @@ async def _stop_training() -> str:
 
 
 def _format_exception(exc: BaseException) -> str:
-    return "".join(traceback.format_exception_only(type(exc), exc)).strip()
+    """Format exception with full traceback for debugging."""
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    # Truncate if too long for Discord
+    if len(tb) > 1800:
+        tb = tb[:900] + "\n...\n" + tb[-900:]
+    return tb
 
 
 @tree.command(name="ask", description="Ask the model a question")
@@ -694,11 +718,25 @@ async def cmd_unload(interaction: discord.Interaction) -> None:
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
     original = getattr(error, "original", error)
     message = _format_exception(original)
+    print(f"[Command Error] {message}")
 
-    if interaction.response.is_done():
-        await interaction.followup.send(f"Command failed:\n```\n{_escape_code_block(message)}\n```")
-    else:
-        await interaction.response.send_message(f"Command failed:\n```\n{_escape_code_block(message)}\n```")
+    try:
+        content = f"Command failed:\n```\n{_escape_code_block(message)}\n```"
+        if len(content) > DISCORD_MESSAGE_LIMIT:
+            content = content[:DISCORD_MESSAGE_LIMIT - 3] + "```"
+        if interaction.response.is_done():
+            await interaction.followup.send(content)
+        else:
+            await interaction.response.send_message(content)
+    except Exception as e:
+        print(f"[Error Handler Failed] Could not send error to Discord: {e}")
+
+
+@client.event
+async def on_error(event: str, *args, **kwargs) -> None:
+    """Catch any unhandled error so the bot never crashes."""
+    print(f"[Bot Error] Unhandled error in {event}:")
+    traceback.print_exc()
 
 
 _synced = False
@@ -749,7 +787,19 @@ def main() -> None:
 
     print(f"[Output Processing Location] Discord Channel: {CONFIG.channel_id}")
     print(f"[Model Directory] {CONFIG.model_dir}")
-    client.run(token)
+
+    while True:
+        try:
+            client.run(token)
+            break  # clean exit
+        except KeyboardInterrupt:
+            print("\n[Bot] Shutting down...")
+            break
+        except Exception as e:
+            print(f"\n[Bot Crash] {e}")
+            traceback.print_exc()
+            print("[Bot] Restarting in 10 seconds...")
+            time.sleep(10)
 
 
 if __name__ == "__main__":

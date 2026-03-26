@@ -951,7 +951,8 @@ def create_args(num_epochs: int = 0, batch_size: int = 1, learning_rate: float =
                 data_preview_count: int = 3,
                 sample_preview_count: int = 3,
                 sample_log_every_epochs: int = 1,
-                sample_max_new_tokens: int = 96) -> Dict[str, Any]:
+                sample_max_new_tokens: int = 96,
+                max_newlines: int = 2) -> Dict[str, Any]:
     """
     num_epochs: 0 = auto-stop (default), any positive number = fixed epochs.
     patience: how many epochs without improvement before auto-stopping.
@@ -990,6 +991,7 @@ def create_args(num_epochs: int = 0, batch_size: int = 1, learning_rate: float =
         "sample_preview_count": sample_preview_count,
         "sample_log_every_epochs": sample_log_every_epochs,
         "sample_max_new_tokens": sample_max_new_tokens,
+        "max_newlines": max_newlines,
     }
 
 
@@ -2076,6 +2078,7 @@ def _sample_after_save(model, tokenizer, encoded_data, device, args, epoch, _emi
 
 def clean_text(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
                eos_token: str = "", bos_token: str = "") -> str:
+    import re as _re
     special_tokens_dict = {
         'pad_token': pad_token,
         'sep_token': sep_token,
@@ -2091,9 +2094,26 @@ def clean_text(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
             after_sep = after_sep[len(bos_token):].strip()
     split_text = after_sep.split(sep_token)[0]
     for token in special_tokens_dict.values():
-        before_sep = before_sep.replace(token, '').strip()
-        split_text = split_text.replace(token, '').strip()
-    return split_text
+        if token:
+            split_text = split_text.replace(token, '').strip()
+
+    # Strip any Phi-3.5 native tokens that leak through
+    for tok in ("<|end|>", "<|endoftext|>", "<|user|>", "<|assistant|>",
+                "<|system|>", "<|placeholder1|>", "<|placeholder2|>",
+                "<|placeholder3|>", "<|placeholder4|>"):
+        split_text = split_text.split(tok)[0]
+
+    # Remove trailing single garbage characters (model artifacts like Z, ^, g, ~)
+    lines = split_text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        # Strip trailing single non-alnum char that looks like garbage
+        line = _re.sub(r'\s*[a-zA-Z~^`|\\]{1}$', '', line.rstrip())
+        if line.strip():
+            cleaned_lines.append(line)
+    split_text = '\n'.join(cleaned_lines)
+
+    return split_text.strip()
 
 
 # --- Prompt & Generation ---
@@ -2145,8 +2165,9 @@ def generate_responses(model, tokenizer, prompt_text: str,
             generated = input_ids[0][self.start_len:]
             return (generated == self.newline_id).sum().item() >= self.max_newlines
 
+    max_newlines = args.get("max_newlines", 2)
     stopping_criteria = StoppingCriteriaList([
-        NewlineStopCriteria(newline_id, max_newlines=6, start_len=input_ids.shape[1])
+        NewlineStopCriteria(newline_id, max_newlines=max_newlines, start_len=input_ids.shape[1])
     ])
 
     generate_kwargs = {

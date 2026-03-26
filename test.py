@@ -9,11 +9,12 @@ if __name__ == "__main__":
 
     args = create_args(
         max_length=512,
-        max_new_tokens=40,
+        max_new_tokens=256,
+        max_newlines=2,
         temperature=0.8,
         top_k=60,
         top_p=0.92,
-        repetition_penalty=1.2
+        repetition_penalty=1.3
     )
 
     while True:
