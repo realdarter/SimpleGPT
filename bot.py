@@ -20,6 +20,7 @@ import subprocess
 import sys
 import time
 import traceback
+import ctypes
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Deque, Optional
@@ -244,7 +245,29 @@ def _gpu_status_text() -> str:
     return f"{gpu_name} ({mem_used:.1f} GB allocated, {mem_reserved:.1f} GB reserved / {mem_total:.1f} GB total)"
 
 
+def _reduce_host_contention() -> None:
+    """Keep the bot from monopolizing the whole machine during load/inference."""
+    try:
+        import torch
+
+        cpu_count = os.cpu_count() or 4
+        torch.set_num_threads(max(1, min(4, cpu_count // 2)))
+        if hasattr(torch, "set_num_interop_threads"):
+            torch.set_num_interop_threads(1)
+    except Exception:
+        pass
+
+    if os.name == "nt":
+        with contextlib.suppress(Exception):
+            BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
+            ctypes.windll.kernel32.SetPriorityClass(
+                ctypes.windll.kernel32.GetCurrentProcess(),
+                BELOW_NORMAL_PRIORITY_CLASS,
+            )
+
+
 def _load_model_blocking() -> str:
+    _reduce_host_contention()
     current_hash = _compute_model_hash(CONFIG.model_dir)
 
     # Already loaded and unchanged — skip
@@ -285,13 +308,14 @@ def _load_model_blocking() -> str:
     STATE.device = device
     STATE.gen_args = create_args(
         max_length=512,
-        max_new_tokens=256,
-        max_newlines=2,
-        temperature=0.8,
-        top_k=60,
-        top_p=0.92,
-        repetition_penalty=1.3,
+        max_new_tokens=48,
+        max_newlines=1,
+        temperature=0.35,
+        top_k=24,
+        top_p=0.82,
+        repetition_penalty=1.12,
     )
+    STATE.gen_args["auto_correct_input"] = False
     STATE.model_loaded_at = time.time()
     STATE.model_hash = current_hash
     return f"Model loaded on `{device}` (hash `{current_hash}`)."
@@ -384,6 +408,7 @@ async def _idle_unload_watcher() -> None:
 async def _generate_response(prompt: str) -> str:
     async with STATE.inference_lock:
         await _ensure_model_loaded()
+        await asyncio.to_thread(_reduce_host_contention)
         return await asyncio.to_thread(
             generate_responses,
             STATE.model,

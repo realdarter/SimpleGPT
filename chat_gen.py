@@ -792,6 +792,7 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
     device = _get_device()
     dtype = _get_dtype(device)
     attn_implementation = _recommended_attn_implementation()
+    load_notes: List[str] = []
 
     base_model_dir = os.path.join(model_directory, "base_model")
     adapter_dir = os.path.join(model_directory, "lora_adapter")
@@ -812,10 +813,10 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
     if attn_implementation is not None:
         model_load_kwargs["attn_implementation"] = attn_implementation
 
-    # Load base model — use 4-bit quantization for training to save VRAM (if bitsandbytes installed)
-    # low_cpu_mem_usage=True loads weights shard by shard instead of all at once (prevents system lag)
+    # Load base model — use quantization when possible to reduce VRAM / host-memory pressure.
+    # low_cpu_mem_usage=True loads weights shard by shard instead of all at once.
     if for_training and device.type == "cuda" and HAS_BNB:
-        print(f"{_C.CYAN}Loading model with 4-bit quantization (QLoRA)...{_C.RESET}")
+        load_notes.append("mode=4bit-train")
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -827,27 +828,36 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
             quantization_config=bnb_config,
             **model_load_kwargs,
         )
-        print(f"{_C.CYAN}Preparing model for QLoRA training...{_C.RESET}", flush=True)
         model = prepare_model_for_kbit_training(model)
+    elif not for_training and device.type == "cuda" and HAS_BNB:
+        load_notes.append("mode=8bit-infer")
+        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model_dir,
+            quantization_config=bnb_config,
+            **model_load_kwargs,
+        )
     elif for_training and device.type == "cuda" and not HAS_BNB:
+        load_notes.append("mode=fp16-train")
         print(f"{_C.YELLOW}Warning: bitsandbytes not installed. Loading in FP16 (uses more VRAM).{_C.RESET}")
         print("  Install it for lower memory usage: pip install bitsandbytes")
         model = AutoModelForCausalLM.from_pretrained(
             base_model_dir,
-            torch_dtype=dtype,
+            dtype=dtype,
             **model_load_kwargs,
         )
     else:
+        load_notes.append(f"mode={str(dtype).replace('torch.', '')}")
         model = AutoModelForCausalLM.from_pretrained(
             base_model_dir,
-            torch_dtype=dtype,
+            dtype=dtype,
             **model_load_kwargs,
         )
     tokenizer = AutoTokenizer.from_pretrained(base_model_dir, trust_remote_code=False)
 
     # Add special tokens and resize embeddings BEFORE loading adapter
     # so the embedding size matches what the adapter was trained with
-    print(f"{_C.CYAN}Configuring tokenizer and embeddings...{_C.RESET}", flush=True)
+    load_notes.append(f"base={base_model_dir}")
 
     # Map our custom tokens to Phi-3.5's native tokens for smart initialization
     # Instead of random/mean init, we transfer knowledge from tokens that serve the same purpose
@@ -859,27 +869,35 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
     }
 
     num_added = tokenizer.add_special_tokens(SPECIAL_TOKENS)
-    if num_added > 0:
+    current_vocab_size = model.get_input_embeddings().weight.shape[0]
+    target_vocab_size = len(tokenizer)
+
+    # Some saved base_model copies already contain the special tokens in the tokenizer,
+    # so add_special_tokens() returns 0 even though the model embedding matrix is still
+    # at the original Phi vocab size. Always realign the model to the tokenizer size.
+    if current_vocab_size != target_vocab_size:
+        load_notes.append(f"resize={current_vocab_size}->{target_vocab_size}")
         old_embeddings = model.get_input_embeddings().weight.data.clone()
-        model.resize_token_embeddings(len(tokenizer))
+        model.resize_token_embeddings(target_vocab_size)
 
-        with torch.no_grad():
-            new_embeddings = model.get_input_embeddings().weight.data
-            for token_name, token_value in SPECIAL_TOKENS.items():
-                new_id = tokenizer.convert_tokens_to_ids(token_value)
-                source_names = _INIT_FROM.get(token_value, [])
-                source_ids = [tokenizer.convert_tokens_to_ids(s) for s in source_names
-                              if tokenizer.convert_tokens_to_ids(s) < old_embeddings.shape[0]]
+        if num_added > 0:
+            with torch.no_grad():
+                new_embeddings = model.get_input_embeddings().weight.data
+                for token_name, token_value in SPECIAL_TOKENS.items():
+                    new_id = tokenizer.convert_tokens_to_ids(token_value)
+                    source_names = _INIT_FROM.get(token_value, [])
+                    source_ids = [tokenizer.convert_tokens_to_ids(s) for s in source_names
+                                  if tokenizer.convert_tokens_to_ids(s) < old_embeddings.shape[0]]
 
-                if source_ids:
-                    # Average the embeddings of semantically related native tokens
-                    source_embeds = torch.stack([old_embeddings[sid] for sid in source_ids])
-                    new_embeddings[new_id] = source_embeds.mean(dim=0)
-                    print(f"{_C.CYAN}  {token_value} (id {new_id}) <- avg of {source_names}{_C.RESET}")
-                else:
-                    # Fallback to mean of all embeddings
-                    new_embeddings[new_id] = old_embeddings.mean(dim=0)
-                    print(f"{_C.CYAN}  {token_value} (id {new_id}) <- mean of all embeddings (fallback){_C.RESET}")
+                    if source_ids:
+                        # Average the embeddings of semantically related native tokens
+                        source_embeds = torch.stack([old_embeddings[sid] for sid in source_ids])
+                        new_embeddings[new_id] = source_embeds.mean(dim=0)
+                        pass
+                    else:
+                        # Fallback to mean of all embeddings
+                        new_embeddings[new_id] = old_embeddings.mean(dim=0)
+                        pass
 
     # Load or create LoRA adapter
     inference_adapter_dir = adapter_dir
@@ -888,7 +906,7 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
 
     if check_adapter_exists(inference_adapter_dir):
         adapter_label = os.path.basename(inference_adapter_dir)
-        print(f"{_C.CYAN}Loading existing LoRA adapter from {adapter_label}...{_C.RESET}")
+        load_notes.append(f"adapter={adapter_label}")
         try:
             model = PeftModel.from_pretrained(model, inference_adapter_dir)
             if for_training:
@@ -920,7 +938,7 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
             else:
                 raise
     elif for_training:
-        print(f"{_C.CYAN}Creating new LoRA adapter...{_C.RESET}")
+        load_notes.append("adapter=new")
         lora_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
             r=32,
@@ -932,9 +950,11 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
     else:
+        load_notes.append("adapter=base-only")
         print(f"{_C.YELLOW}Warning: No LoRA adapter found. Using base model only.{_C.RESET}")
 
-    print(f"{_C.GREEN}{_C.BOLD}Model loaded in {time.time() - start_time:.2f} seconds.{_C.RESET}")
+    summary = " | ".join(load_notes)
+    print(f"{_C.GREEN}{_C.BOLD}Model load summary: {summary} | loaded_in={time.time() - start_time:.2f}s{_C.RESET}")
     return model, tokenizer
 
 
@@ -2112,6 +2132,9 @@ def clean_text(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
                 "<|placeholder3|>", "<|placeholder4|>"):
         split_text = split_text.split(tok)[0]
 
+    # Strip common mojibake / replacement chars before further cleanup.
+    split_text = split_text.replace("\ufffd", "").replace("�", "").strip()
+
     # Remove trailing single garbage characters (model artifacts like Z, ^, g, ~)
     lines = split_text.split('\n')
     cleaned_lines = []
@@ -2122,7 +2145,98 @@ def clean_text(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
             cleaned_lines.append(line)
     split_text = '\n'.join(cleaned_lines)
 
+    # Model sometimes chains multiple fragments with pipe separators.
+    split_text = _re.split(r'\s+\|\s+', split_text, maxsplit=1)[0].strip()
+
+    # Keep replies short and avoid rambling into extra fragments.
+    if split_text:
+        split_text = '\n'.join(split_text.splitlines()[:2]).strip()
+        split_text = _truncate_text(split_text, limit=180)
+
     return split_text.strip()
+
+
+# Runtime cleanup override for weak LoRA outputs.
+def _clean_text_runtime(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
+                        eos_token: str = "", bos_token: str = "") -> str:
+    import re as _re
+
+    special_tokens_dict = {
+        'pad_token': pad_token,
+        'sep_token': sep_token,
+        'eos_token': eos_token,
+        'bos_token': bos_token
+    }
+    _, _, after_sep = uncleaned_text.partition(sep_token)
+    after_sep = after_sep.replace(bos_token, '').strip()
+    while after_sep.startswith(sep_token) or after_sep.startswith(bos_token):
+        if after_sep.startswith(sep_token):
+            after_sep = after_sep[len(sep_token):].strip()
+        if after_sep.startswith(bos_token):
+            after_sep = after_sep[len(bos_token):].strip()
+    split_text = after_sep.split(sep_token)[0]
+    for token in special_tokens_dict.values():
+        if token:
+            split_text = split_text.replace(token, '').strip()
+
+    for tok in ("<|end|>", "<|endoftext|>", "<|user|>", "<|assistant|>",
+                "<|system|>", "<|placeholder1|>", "<|placeholder2|>",
+                "<|placeholder3|>", "<|placeholder4|>"):
+        split_text = split_text.split(tok)[0]
+
+    split_text = split_text.replace("\ufffd", "").replace("ï¿½", "").strip()
+    split_text = _re.sub(r"\[\s*NL\s*\]", "\n", split_text, flags=_re.I)
+    split_text = _re.sub(
+        r"\[(?:USER|PINGUSER|PING ?ME|IMAGE|VIDEO|AUDIO|ATTACHMENT|FILE|PATH|EMAIL|PHONE|IP|CHANNEL|LINK|MEDIA_LINK|DISCORD_LINK|NONE)\]",
+        "",
+        split_text,
+        flags=_re.I,
+    )
+    split_text = _re.sub(
+        r"\[(?:PHOTOS?|PHOTO|IMAGE OF|VIDEO PLAYER READY WITH|SEND IT TO MY DISCORD|PHRASE|PING:? [^\]]+)\]",
+        "",
+        split_text,
+        flags=_re.I,
+    )
+    split_text = _re.sub(r"https?://\S+", "", split_text, flags=_re.I)
+
+    lines = split_text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        line = _re.sub(r'\s*[a-zA-Z~^`|\\]{1}$', '', line.rstrip())
+        line = _re.sub(r'(?:\s*[\],;:}{)(]{2,}\s*)+', ' ', line).strip()
+        line = _re.sub(r'\[[^\]]{0,40}$', '', line).strip()
+        if line:
+            cleaned_lines.append(line)
+    split_text = '\n'.join(cleaned_lines)
+    split_text = _re.split(r'\s+\|\s+', split_text, maxsplit=1)[0].strip()
+    split_text = '\n'.join(line.strip() for line in split_text.splitlines() if line.strip())
+    if split_text:
+        split_text = '\n'.join(split_text.splitlines()[:2]).strip()
+        split_text = _truncate_text(split_text, limit=180)
+    return split_text.strip()
+
+
+def _looks_bad_generation(text: str) -> bool:
+    import re as _re
+    if not text:
+        return True
+    stripped = text.strip()
+    if len(stripped) < 2:
+        return True
+    if "http://" in stripped or "https://" in stripped:
+        return True
+    if stripped.count("<|") >= 1 or "<[" in stripped:
+        return True
+    if len(_re.findall(r"\[[^\]]*\]", stripped)) >= 2:
+        return True
+    if sum(ch in "[]{}|" for ch in stripped) >= 6:
+        return True
+    allowed_emoji = set("😭😂🥺😔😎😳😤😅🤣❤️💀✨")
+    non_ascii = sum(1 for ch in stripped if ord(ch) > 127 and ch not in allowed_emoji and not ch.isspace())
+    if non_ascii >= max(6, len(stripped) // 6):
+        return True
+    return False
 
 
 # --- Prompt & Generation ---
@@ -2250,14 +2364,20 @@ def generate_responses(model, tokenizer, prompt_text: str,
         NewlineStopCriteria(newline_id, max_newlines=max_newlines, start_len=input_ids.shape[1])
     ])
 
+    do_sample = bool(args.get("do_sample", True))
+    temperature = float(args.get("temperature", 0.7))
+    if temperature <= 0.0:
+        do_sample = False
+        temperature = 1.0
+
     generate_kwargs = {
         "attention_mask": attention_mask,
         "max_new_tokens": args.get("max_new_tokens", 256),
-        "temperature": args["temperature"],
+        "temperature": temperature,
         "top_k": args["top_k"],
         "top_p": args["top_p"],
         "repetition_penalty": args["repetition_penalty"],
-        "do_sample": True,
+        "do_sample": do_sample,
         "pad_token_id": tokenizer.pad_token_id,
         "eos_token_id": (
             tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS["eos_token"])
@@ -2285,19 +2405,39 @@ def generate_responses(model, tokenizer, prompt_text: str,
     generated_text = tokenizer.decode(output[0], skip_special_tokens=False)
     if clean_result:
         if _has_lora_adapter(model):
-            generated_text = clean_text(
+            generated_text = _clean_text_runtime(
                 generated_text,
                 pad_token=tokenizer.pad_token,
                 sep_token=tokenizer.sep_token,
                 eos_token=tokenizer.eos_token,
                 bos_token=tokenizer.bos_token
             )
+            if _looks_bad_generation(generated_text):
+                retry_kwargs = dict(generate_kwargs)
+                retry_kwargs.update({
+                    "do_sample": False,
+                    "temperature": 1.0,
+                    "top_k": 0,
+                    "top_p": 1.0,
+                    "repetition_penalty": min(1.12, float(args.get("repetition_penalty", 1.2))),
+                    "max_new_tokens": min(48, int(args.get("max_new_tokens", 256))),
+                })
+                with torch.no_grad():
+                    retry_output = model.generate(input_ids, **retry_kwargs)
+                retry_text = tokenizer.decode(retry_output[0], skip_special_tokens=False)
+                retry_text = _clean_text_runtime(
+                    retry_text,
+                    pad_token=tokenizer.pad_token,
+                    sep_token=tokenizer.sep_token,
+                    eos_token=tokenizer.eos_token,
+                    bos_token=tokenizer.bos_token
+                )
+                if retry_text and not _looks_bad_generation(retry_text):
+                    generated_text = retry_text
         else:
-            # For base model (no adapter), extract assistant reply from native format
             marker = "<|assistant|>"
             if marker in generated_text:
                 generated_text = generated_text.split(marker, 1)[1]
-            # Strip Phi-3.5 control tokens
             for tok in ("<|end|>", "<|endoftext|>", "<|user|>", "<|system|>"):
                 generated_text = generated_text.split(tok)[0]
             generated_text = generated_text.strip()
