@@ -594,7 +594,9 @@ def ensure_tokens(model, tokenizer, special_tokens: Dict[str, str] = SPECIAL_TOK
     """Adds special tokens and resizes embeddings. Returns number of tokens added."""
     num_added = tokenizer.add_special_tokens(special_tokens)
     if num_added > 0:
-        model.resize_token_embeddings(len(tokenizer))
+        current = model.get_input_embeddings().weight.shape[0]
+        target = max(current, len(tokenizer))
+        model.resize_token_embeddings(target)
     return num_added
 
 
@@ -778,6 +780,19 @@ def download_base_model(save_directory: str) -> bool:
             f"Downloaded files for {BASE_MODEL_NAME}, but no model weights were found in {save_directory}."
         )
 
+    # Remove auto_map so we use native transformers Phi-3 support (not outdated custom code)
+    config_path = os.path.join(save_directory, "config.json")
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+            if "auto_map" in cfg:
+                del cfg["auto_map"]
+                with open(config_path, "w") as f:
+                    json.dump(cfg, f, indent=2)
+        except Exception:
+            pass
+
     print(f"{BASE_MODEL_NAME} downloaded and saved in {save_directory}")
     return True
 
@@ -870,11 +885,8 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
 
     num_added = tokenizer.add_special_tokens(SPECIAL_TOKENS)
     current_vocab_size = model.get_input_embeddings().weight.shape[0]
-    target_vocab_size = len(tokenizer)
+    target_vocab_size = max(current_vocab_size, len(tokenizer))  # never shrink embeddings
 
-    # Some saved base_model copies already contain the special tokens in the tokenizer,
-    # so add_special_tokens() returns 0 even though the model embedding matrix is still
-    # at the original Phi vocab size. Always realign the model to the tokenizer size.
     if current_vocab_size != target_vocab_size:
         load_notes.append(f"resize={current_vocab_size}->{target_vocab_size}")
         old_embeddings = model.get_input_embeddings().weight.data.clone()
@@ -897,7 +909,6 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
                     else:
                         # Fallback to mean of all embeddings
                         new_embeddings[new_id] = old_embeddings.mean(dim=0)
-                        pass
 
     # Load or create LoRA adapter
     inference_adapter_dir = adapter_dir
@@ -2116,7 +2127,7 @@ def clean_text(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
     }
     before_sep, sep, after_sep = uncleaned_text.partition(sep_token)
     after_sep = after_sep.replace(bos_token, '').strip()
-    while after_sep.startswith(sep_token) or after_sep.startswith(bos_token):
+    while (sep_token and after_sep.startswith(sep_token)) or (bos_token and after_sep.startswith(bos_token)):
         if after_sep.startswith(sep_token):
             after_sep = after_sep[len(sep_token):].strip()
         if after_sep.startswith(bos_token):
@@ -2132,23 +2143,55 @@ def clean_text(uncleaned_text: str, pad_token: str = "", sep_token: str = "",
                 "<|placeholder3|>", "<|placeholder4|>"):
         split_text = split_text.split(tok)[0]
 
-    # Strip common mojibake / replacement chars before further cleanup.
-    split_text = split_text.replace("\ufffd", "").replace("�", "").strip()
+    # Strip mojibake / replacement chars
+    split_text = split_text.replace("\ufffd", "").replace("\u00ef\u00bf\u00bd", "").strip()
 
-    # Remove trailing single garbage characters (model artifacts like Z, ^, g, ~)
+    # Convert [NL] tokens back to actual newlines
+    split_text = split_text.replace("[NL]", "\n").replace("[Nl]", "\n").replace("[nl]", "\n")
+
+    # Keep Discord emoji codes and placeholders — they're part of the personality
+
+    # Remove non-Latin garbage (multilingual hallucinations)
+    split_text = _re.sub(r'[\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]+', '', split_text)  # Cyrillic
+    split_text = _re.sub(r'[\u3000-\u9FFF\uF900-\uFAFF]+', '', split_text)  # CJK
+    split_text = _re.sub(r'[\u0100-\u024F]{3,}', '', split_text)  # Long Latin Extended runs (Hungarian/Polish gibberish)
+
+    # Remove LaTeX-like artifacts (but not plain dollar amounts)
+    split_text = _re.sub(r'\$[a-zA-Z\\{][^\s]*', '', split_text)
+    split_text = _re.sub(r'\\[a-zA-Z]+\{[^}]*\}', '', split_text)
+
+    # Clean up lines
     lines = split_text.split('\n')
     cleaned_lines = []
     for line in lines:
-        # Strip trailing single non-alnum char that looks like garbage
-        line = _re.sub(r'\s*[a-zA-Z~^`|\\]{1}$', '', line.rstrip())
-        if line.strip():
-            cleaned_lines.append(line)
+        # Strip trailing symbol garbage without clipping real word endings.
+        line = _re.sub(r'\s*[~^`|\\=\$%]{1,3}$', '', line.rstrip())
+        # Only keep lines with actual content
+        if line.strip() and _re.search(r'[a-zA-Z0-9]', line):
+            cleaned_lines.append(line.strip())
     split_text = '\n'.join(cleaned_lines)
 
-    # Model sometimes chains multiple fragments with pipe separators.
+    # Remove truncated words at the end (cut off mid-syllable)
+    _ok_short = {'i', 'a', 'u', 'r', 'w', 'ok', 'no', 'ya', 'ye', 'yo', 'hi', 'ur',
+                 'im', 'my', 'me', 'we', 'he', 'it', 'so', 'do', 'go', 'be', 'up',
+                 'an', 'am', 'as', 'at', 'by', 'if', 'in', 'is', 'of', 'on', 'or',
+                 'to', 'us', 'lol', 'omg', 'wtf', 'idk', 'ngl', 'smh', 'rip', 'gg',
+                 'ez', 'fr', 'fs', 'af', 'np', 'ty', 'gn', 'gm', 'ew', 'uh', 'hm',
+                 'oh', 'ah', 'ow', 'the', 'and', 'but', 'for', 'not', 'you', 'all',
+                 'can', 'was', 'one', 'out', 'got', 'has', 'how', 'its', 'now', 'old',
+                 'see', 'who', 'did', 'get', 'say', 'too', 'use', 'bro', 'tho', 'rn',
+                 'bc', 'nah', 'yea', 'yes', 'tbh', 'xd', '3'}
+    if split_text.strip():
+        words = split_text.rstrip().split()
+        if words:
+            last = words[-1].rstrip('.,!?').lower()
+            if last not in _ok_short and len(last) <= 3 and last.isalpha():
+                split_text = ' '.join(words[:-1])
+
+    # Model sometimes chains fragments with pipes
     split_text = _re.split(r'\s+\|\s+', split_text, maxsplit=1)[0].strip()
 
-    # Keep replies short and avoid rambling into extra fragments.
+    # Keep replies to max 2 lines
     if split_text:
         split_text = '\n'.join(split_text.splitlines()[:2]).strip()
         split_text = _truncate_text(split_text, limit=180)
@@ -2169,7 +2212,7 @@ def _clean_text_runtime(uncleaned_text: str, pad_token: str = "", sep_token: str
     }
     _, _, after_sep = uncleaned_text.partition(sep_token)
     after_sep = after_sep.replace(bos_token, '').strip()
-    while after_sep.startswith(sep_token) or after_sep.startswith(bos_token):
+    while (sep_token and after_sep.startswith(sep_token)) or (bos_token and after_sep.startswith(bos_token)):
         if after_sep.startswith(sep_token):
             after_sep = after_sep[len(sep_token):].strip()
         if after_sep.startswith(bos_token):
@@ -2186,8 +2229,9 @@ def _clean_text_runtime(uncleaned_text: str, pad_token: str = "", sep_token: str
 
     split_text = split_text.replace("\ufffd", "").replace("ï¿½", "").strip()
     split_text = _re.sub(r"\[\s*NL\s*\]", "\n", split_text, flags=_re.I)
+    split_text = _re.sub(r"\bI\s+MAGE\b", "IMAGE", split_text, flags=_re.I)
     split_text = _re.sub(
-        r"\[(?:USER|PINGUSER|PING ?ME|IMAGE|VIDEO|AUDIO|ATTACHMENT|FILE|PATH|EMAIL|PHONE|IP|CHANNEL|LINK|MEDIA_LINK|DISCORD_LINK|NONE)\]",
+        r"\[(?:USER|PINGUSER|PING ?ME|IMAGE|I ?MAGE|VIDEO|AUDIO|ATTACHMENT|FILE|PATH|EMAIL|PHONE|IP|CHANNEL|LINK|MEDIA_LINK|DISCORD_LINK|NONE)\]",
         "",
         split_text,
         flags=_re.I,
@@ -2203,7 +2247,7 @@ def _clean_text_runtime(uncleaned_text: str, pad_token: str = "", sep_token: str
     lines = split_text.split('\n')
     cleaned_lines = []
     for line in lines:
-        line = _re.sub(r'\s*[a-zA-Z~^`|\\]{1}$', '', line.rstrip())
+        line = _re.sub(r'\s*[~^`|\\]{1,3}$', '', line.rstrip())
         line = _re.sub(r'(?:\s*[\],;:}{)(]{2,}\s*)+', ' ', line).strip()
         line = _re.sub(r'\[[^\]]{0,40}$', '', line).strip()
         if line:
@@ -2255,6 +2299,7 @@ _INPUT_VOCAB = None
 
 def _build_input_vocab():
     """Build a set of known words from training data for input correction."""
+    import re
     global _INPUT_VOCAB
     if _INPUT_VOCAB is not None:
         return _INPUT_VOCAB

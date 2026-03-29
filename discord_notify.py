@@ -132,6 +132,6 @@ def notify_training_done(total_time: str, best_epoch: int = None, best_val_loss:
     """Send a training complete notification."""
     parts = [f"**Training {'auto-stopped' if stopped_early else 'complete'}**"]
     parts.append(f"Total time: {total_time}")
-    if best_epoch is not None:
+    if best_epoch is not None and best_val_loss is not None:
         parts.append(f"Best epoch: {best_epoch} (val loss: `{best_val_loss:.4f}`)")
     send("\n".join(parts))

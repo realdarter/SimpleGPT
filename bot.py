@@ -56,11 +56,17 @@ MODEL_IDLE_TIMEOUT_SEC = 1200  # 20 mins — unload model if no /ask in this tim
 def _compute_model_hash(model_dir: str) -> str:
     """Hash the adapter + config files to detect model changes (e.g. after training)."""
     h = hashlib.sha256()
+    best_adapter_dir = os.path.join(model_dir, "best_lora_adapter")
     adapter_dir = os.path.join(model_dir, "lora_adapter")
     base_dir = os.path.join(model_dir, "base_model")
 
-    # Hash adapter files if they exist, otherwise hash base config
-    target_dir = adapter_dir if os.path.isdir(adapter_dir) else base_dir
+    # Use best_lora_adapter for inference hash (matches load_model_and_tokenizer logic)
+    if os.path.isdir(best_adapter_dir) and os.path.isfile(os.path.join(best_adapter_dir, "adapter_config.json")):
+        target_dir = best_adapter_dir
+    elif os.path.isdir(adapter_dir):
+        target_dir = adapter_dir
+    else:
+        target_dir = base_dir
     if not os.path.isdir(target_dir):
         return "no_model"
 
@@ -105,6 +111,11 @@ class RuntimeState:
     train_tail: Deque[str] = field(default_factory=lambda: deque(maxlen=200))
     train_status_msg: Optional[Any] = None  # Discord message to edit in-place
 
+    auto_reply: bool = False  # when True, bot replies to every message in the set channel
+    auto_reply_channel_id: Optional[int] = None  # must be set via /autoreply
+    reply_queue: Optional[asyncio.Queue] = None
+    reply_worker_task: Optional[asyncio.Task] = None
+
     model_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     inference_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     train_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -113,7 +124,7 @@ class RuntimeState:
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG = BotConfig(
     channel_id=int(os.getenv("DISCORD_CHANNEL_ID", "1346717893911511051")),
-    model_dir=os.getenv("SIMPLEGPT_MODEL_DIR", "checkpoint/run"),
+    model_dir=os.getenv("SIMPLEGPT_MODEL_DIR", os.path.join(SCRIPT_DIR, "checkpoint", "run")),
     script_dir=SCRIPT_DIR,
     train_script=os.path.join(SCRIPT_DIR, "train.py"),
 )
@@ -121,6 +132,7 @@ STATE = RuntimeState()
 
 
 intents = discord.Intents.default()
+intents.message_content = True  # needed to read messages for auto-reply
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
@@ -196,6 +208,34 @@ async def _send_text_chunks(target, text: str, *, code_block: bool = False, pref
         await target.send(content)
 
 
+async def _fallback_channel_reply(
+    interaction: discord.Interaction,
+    text: str,
+    *,
+    code_block: bool = False,
+    prefix: str = "",
+) -> None:
+    """Last-resort reply path when the interaction token has already expired."""
+    channel = await _resolve_channel(interaction.channel_id or CONFIG.channel_id)
+    if channel is None:
+        raise RuntimeError("Could not resolve a Discord channel for fallback output.")
+
+    fallback_prefix = f"{interaction.user.mention} " if getattr(interaction, "user", None) else ""
+    await _send_text_chunks(channel, text, code_block=code_block, prefix=fallback_prefix + prefix)
+
+
+async def _safe_defer(interaction: discord.Interaction, *, thinking: bool = True) -> bool:
+    """Attempt to acknowledge the interaction; return False if Discord already expired it."""
+    if interaction.response.is_done():
+        return True
+
+    try:
+        await interaction.response.defer(thinking=thinking)
+        return True
+    except discord.NotFound:
+        return False
+
+
 async def _safe_interaction_reply(
     interaction: discord.Interaction,
     text: str,
@@ -215,11 +255,21 @@ async def _safe_interaction_reply(
         else:
             content = message_prefix + chunk
 
-        if target is interaction.response:
-            await interaction.response.send_message(content)
-            target = interaction.followup
-        else:
-            await interaction.followup.send(content)
+        try:
+            if target is interaction.response:
+                await interaction.response.send_message(content)
+                target = interaction.followup
+            else:
+                await interaction.followup.send(content)
+        except discord.NotFound:
+            remaining = "\n".join(chunks[index:])
+            await _fallback_channel_reply(
+                interaction,
+                remaining,
+                code_block=code_block,
+                prefix=message_prefix,
+            )
+            return
 
 
 async def _resolve_channel(channel_id: int):
@@ -259,10 +309,10 @@ def _reduce_host_contention() -> None:
 
     if os.name == "nt":
         with contextlib.suppress(Exception):
-            BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
+            IDLE_PRIORITY_CLASS = 0x00000040
             ctypes.windll.kernel32.SetPriorityClass(
                 ctypes.windll.kernel32.GetCurrentProcess(),
-                BELOW_NORMAL_PRIORITY_CLASS,
+                IDLE_PRIORITY_CLASS,
             )
 
 
@@ -279,21 +329,7 @@ def _load_model_blocking() -> str:
         print(f"[Model] Hash changed: {STATE.model_hash} -> {current_hash}, reloading...")
         _unload_model_blocking()
 
-    try:
-        model, tokenizer = load_model_and_tokenizer(CONFIG.model_dir, download=False)
-    except FileNotFoundError as exc:
-        base_model_dir = os.path.join(CONFIG.model_dir, "base_model")
-        if os.path.isdir(base_model_dir):
-            raise
-        print(f"[Model] Base model missing at {base_model_dir}, attempting download...")
-        try:
-            model, tokenizer = load_model_and_tokenizer(CONFIG.model_dir, download=True)
-        except Exception as download_exc:
-            raise FileNotFoundError(
-                f"Base model missing at {base_model_dir} and automatic download failed. "
-                f"Restore the model files there or let the bot download them. "
-                f"Original error: {exc}. Download error: {download_exc}"
-            ) from download_exc
+    model, tokenizer = load_model_and_tokenizer(CONFIG.model_dir, download=False)
     device = _get_device()
 
     try:
@@ -406,10 +442,16 @@ async def _idle_unload_watcher() -> None:
 
 
 async def _generate_response(prompt: str) -> str:
+    import torch
+
     async with STATE.inference_lock:
         await _ensure_model_loaded()
         await asyncio.to_thread(_reduce_host_contention)
-        return await asyncio.to_thread(
+
+        # Yield before GPU work
+        await asyncio.sleep(0)
+
+        result = await asyncio.to_thread(
             generate_responses,
             STATE.model,
             STATE.tokenizer,
@@ -418,6 +460,15 @@ async def _generate_response(prompt: str) -> str:
             args=STATE.gen_args,
             clean_result=True,
         )
+
+        # Free GPU cache after generation
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+        return result
 
 
 def _build_train_environment() -> dict[str, str]:
@@ -483,7 +534,6 @@ async def _stream_train_output(process: subprocess.Popen[str], channel_id: int) 
             if isinstance(item, str) and item:
                 pending_lines.append(item)
                 STATE.train_tail.append(item)
-                print(item)
 
             # Always edit the same message
             if pending_lines and (time.monotonic() - last_flush) >= TRAIN_LOG_INTERVAL_SEC:
@@ -608,7 +658,7 @@ async def cmd_ask(interaction: discord.Interaction, question: str) -> None:
         )
         return
 
-    await interaction.response.defer(thinking=True)
+    await _safe_defer(interaction, thinking=True)
 
     try:
         # Check hash — auto-reload if model changed (e.g. after training)
@@ -646,7 +696,7 @@ async def cmd_test(interaction: discord.Interaction, prompt: str = "Hello, how a
         )
         return
 
-    await interaction.response.defer(thinking=True)
+    await _safe_defer(interaction, thinking=True)
 
     try:
         logs: list[str] = []
@@ -670,7 +720,7 @@ async def cmd_test(interaction: discord.Interaction, prompt: str = "Hello, how a
 
 @tree.command(name="train", description="Start model training in the background")
 async def cmd_train(interaction: discord.Interaction) -> None:
-    await interaction.response.defer(thinking=True)
+    await _safe_defer(interaction, thinking=True)
 
     try:
         channel_id = interaction.channel_id or CONFIG.channel_id
@@ -683,7 +733,7 @@ async def cmd_train(interaction: discord.Interaction) -> None:
 
 @tree.command(name="stop", description="Stop the running training process")
 async def cmd_stop(interaction: discord.Interaction) -> None:
-    await interaction.response.defer(thinking=True)
+    await _safe_defer(interaction, thinking=True)
     message = await _stop_training()
     await interaction.followup.send(message)
 
@@ -727,7 +777,7 @@ async def cmd_reload(interaction: discord.Interaction) -> None:
         )
         return
 
-    await interaction.response.defer(thinking=True)
+    await _safe_defer(interaction, thinking=True)
 
     try:
         async with STATE.inference_lock:
@@ -745,7 +795,7 @@ async def cmd_unload(interaction: discord.Interaction) -> None:
         )
         return
 
-    await interaction.response.defer(thinking=True)
+    await _safe_defer(interaction, thinking=True)
 
     try:
         async with STATE.inference_lock:
@@ -769,6 +819,11 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             await interaction.followup.send(content)
         else:
             await interaction.response.send_message(content)
+    except discord.NotFound:
+        try:
+            await _fallback_channel_reply(interaction, message, code_block=True, prefix="Command failed:\n")
+        except Exception as e:
+            print(f"[Error Handler Failed] Could not send error to Discord: {e}")
     except Exception as e:
         print(f"[Error Handler Failed] Could not send error to Discord: {e}")
 
@@ -780,15 +835,163 @@ async def on_error(event: str, *args, **kwargs) -> None:
     traceback.print_exc()
 
 
+AUTOREPLY_COOLDOWN_SEC = 5.0  # seconds between replies — gives GPU time to breathe
+AUTOREPLY_QUEUE_MAX = 5       # max queued messages
+
+
+async def _message_still_exists(message: discord.Message) -> bool:
+    """Check if a message hasn't been deleted before replying."""
+    try:
+        await message.channel.fetch_message(message.id)
+        return True
+    except (discord.NotFound, discord.HTTPException):
+        return False
+
+
+async def _autoreply_worker():
+    """Background worker: processes one message at a time with cooldown and deleted-message checks."""
+    import torch
+
+    while True:
+        try:
+            message = await STATE.reply_queue.get()
+
+
+            # Skip to the latest message if queue backed up
+            while not STATE.reply_queue.empty():
+                try:
+                    message = STATE.reply_queue.get_nowait()
+
+                except asyncio.QueueEmpty:
+                    break
+
+            # Check if autoreply is still on
+            if not STATE.auto_reply or _is_training():
+
+                continue
+
+            # Deleted-message check happens after generation to avoid API rate limits
+
+            content = message.content.strip()
+            if not content:
+                continue
+
+            try:
+                # Ensure model is loaded
+                if STATE.model is None:
+                    await _ensure_model_loaded()
+
+                STATE.last_ask_at = time.time()
+                _reset_idle_timer()
+
+                # Give the event loop a moment before heavy GPU work
+                await asyncio.sleep(0.1)
+
+                response = await _generate_response(content)
+
+                # Yield to event loop after GPU work so Discord/OS can breathe
+                await asyncio.sleep(0.1)
+
+                # Clear GPU cache after each generation to free VRAM
+                try:
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
+
+                response = response.strip() if response else ""
+                if not response or response == "(empty response)":
+                    continue
+
+                # Check again — message might have been deleted during generation
+                try:
+                    if not await _message_still_exists(message):
+                        print("[AutoReply] Message deleted during generation, skipping reply.")
+                        continue
+                except Exception:
+                    continue
+
+                response = _truncate(response, DISCORD_MESSAGE_LIMIT - 10)
+                try:
+                    await message.reply(response, mention_author=False)
+                except discord.NotFound:
+                    print("[AutoReply] Message was deleted before reply could be sent.")
+                except discord.Forbidden:
+                    print("[AutoReply] Missing permissions to reply.")
+                except discord.HTTPException as exc:
+                    print(f"[AutoReply] Discord HTTP error: {exc}")
+
+            except Exception as exc:
+                print(f"[AutoReply Error] {exc}")
+                traceback.print_exc()
+
+            # Cooldown — let GPU and system rest between replies
+            await asyncio.sleep(AUTOREPLY_COOLDOWN_SEC)
+
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            print(f"[AutoReply Worker Fatal] {exc}")
+            traceback.print_exc()
+            await asyncio.sleep(3)
+
+
+@tree.command(name="setchannel", description="Set this channel for auto-reply")
+async def cmd_setchannel(interaction: discord.Interaction) -> None:
+    STATE.auto_reply_channel_id = interaction.channel_id
+    await interaction.response.send_message(
+        f"Auto-reply channel set to <#{interaction.channel_id}>."
+    )
+    print(f"[AutoReply] Channel set to {interaction.channel_id}")
+
+
+@tree.command(name="autoreply", description="Toggle auto-reply on/off")
+async def cmd_autoreply(interaction: discord.Interaction) -> None:
+    if STATE.auto_reply_channel_id is None:
+        await interaction.response.send_message(
+            "No channel set. Use `/setchannel` in the channel you want first."
+        )
+        return
+
+    STATE.auto_reply = not STATE.auto_reply
+
+    if STATE.auto_reply:
+        if STATE.reply_queue is None:
+            STATE.reply_queue = asyncio.Queue(maxsize=AUTOREPLY_QUEUE_MAX)
+        if STATE.reply_worker_task is None or STATE.reply_worker_task.done():
+            STATE.reply_worker_task = asyncio.create_task(_autoreply_worker())
+        await interaction.response.send_message(
+            f"Auto-reply **ON** in <#{STATE.auto_reply_channel_id}>."
+        )
+        print(f"[AutoReply] ON in channel {STATE.auto_reply_channel_id}")
+    else:
+        if STATE.reply_queue is not None:
+            while not STATE.reply_queue.empty():
+                try:
+                    STATE.reply_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+        if STATE.reply_worker_task is not None and not STATE.reply_worker_task.done():
+            STATE.reply_worker_task.cancel()
+            STATE.reply_worker_task = None
+        await interaction.response.send_message(
+            f"Auto-reply **OFF** (was <#{STATE.auto_reply_channel_id}>)."
+        )
+        print(f"[AutoReply] OFF")
+
+
 _synced = False
 
 @client.event
 async def on_ready() -> None:
     global _synced
     if not _synced:
-        await tree.sync()
+        try:
+            await tree.sync()
+        except discord.HTTPException as e:
+            print(f"[Bot] Failed to sync commands: {e}")
         _synced = True
-        print("Slash commands synced: /ask /test /train /stop /status /reload /unload")
+        print("Slash commands synced: /ask /test /train /stop /status /reload /unload /autoreply")
     print(f"Bot ready as {client.user} (ID: {client.user.id})")
 
     channel = await _resolve_channel(CONFIG.channel_id)
@@ -802,8 +1005,42 @@ async def on_ready() -> None:
                 "`/stop` stop training\n"
                 "`/status` inspect model and GPU state\n"
                 "`/reload` reload the current checkpoint\n"
-                "`/unload` free model memory"
+                "`/unload` free model memory\n"
+                "`/setchannel` set this channel for auto-reply\n"
+                "`/autoreply` toggle auto-reply on/off"
             )
+
+
+@client.event
+async def on_message(message: discord.Message) -> None:
+    if message.author == client.user or message.author.bot:
+        return
+    if not STATE.auto_reply:
+        return
+    if STATE.auto_reply_channel_id is None:
+        return
+    if message.channel.id != STATE.auto_reply_channel_id:
+        return
+    if _is_training():
+        return
+    content = message.content.strip()
+    if not content or content.startswith("/"):
+        return
+
+
+
+    if STATE.reply_queue is not None:
+        if STATE.reply_queue.full():
+            try:
+                STATE.reply_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        try:
+            STATE.reply_queue.put_nowait(message)
+        except asyncio.QueueFull:
+            pass
+    else:
+        print("[AutoReply] Queue not initialized!")
 
 
 def _load_token() -> Optional[str]:
@@ -829,18 +1066,13 @@ def main() -> None:
     print(f"[Output Processing Location] Discord Channel: {CONFIG.channel_id}")
     print(f"[Model Directory] {CONFIG.model_dir}")
 
-    while True:
-        try:
-            client.run(token)
-            break  # clean exit
-        except KeyboardInterrupt:
-            print("\n[Bot] Shutting down...")
-            break
-        except Exception as e:
-            print(f"\n[Bot Crash] {e}")
-            traceback.print_exc()
-            print("[Bot] Restarting in 10 seconds...")
-            time.sleep(10)
+    try:
+        client.run(token)
+    except KeyboardInterrupt:
+        print("\n[Bot] Shutting down...")
+    except Exception as e:
+        print(f"\n[Bot Crash] {e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

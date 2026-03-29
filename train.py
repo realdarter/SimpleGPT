@@ -39,8 +39,10 @@ def on_event(event_type, **kwargs):
 
 
 if __name__ == "__main__":
-    model_directory = 'checkpoint/run'
-    csv_path = 'training_data.csv'
+    import os as _os
+    _SCRIPT_DIR = _os.path.dirname(_os.path.abspath(__file__))
+    model_directory = _os.path.join(_SCRIPT_DIR, 'checkpoint', 'run')
+    csv_path = _os.path.join(_SCRIPT_DIR, 'training_data.csv')
 
     print(f"[Output Processing Location] Discord Channel: {discord_notify.DISCORD_CHANNEL_ID}")
     success = discord_notify.send(f"[Output Processing Location] Discord Channel: {discord_notify.DISCORD_CHANNEL_ID}")
