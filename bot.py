@@ -52,6 +52,18 @@ IMPORTANT_TRAIN_TOKENS = (
 STREAM_SENTINEL = object()
 MODEL_IDLE_TIMEOUT_SEC = 1200  # 20 mins — unload model if no /ask in this time
 
+def _replace_tokens(text: str, display_name: str) -> str:
+    """Replace training data tokens with real values at runtime."""
+    text = text.replace("@[User]", f"@{display_name}")
+    text = text.replace("[User]", display_name)
+    text = text.replace("[Pinguser]", f"@{display_name}")
+    text = text.replace("[PHONE]", "911")
+    text = text.replace("[EMAIL]", "goose@gmail.com")
+    text = text.replace("[ATTACHMENT]", "")
+    text = text.replace("[AUDIO]", "")
+    text = text.replace("[PROFANITY]", "")
+    return text.strip()
+
 
 def _compute_model_hash(model_dir: str) -> str:
     """Hash the adapter + config files to detect model changes (e.g. after training)."""
@@ -675,6 +687,7 @@ async def cmd_ask(interaction: discord.Interaction, question: str) -> None:
 
         response = await _generate_response(question)
         response = response.strip() or "(empty response)"
+        response = _replace_tokens(response, interaction.user.display_name)
         response = _truncate(response, 3500)
 
         if load_note:
@@ -903,6 +916,10 @@ async def _autoreply_worker():
                 if not response or response == "(empty response)":
                     continue
 
+                # Replace placeholder names with the actual user who sent the message
+                display_name = message.author.display_name
+                response = _replace_tokens(response, display_name)
+
                 # Check again — message might have been deleted during generation
                 try:
                     if not await _message_still_exists(message):
@@ -988,10 +1005,17 @@ async def on_ready() -> None:
     if not _synced:
         try:
             await tree.sync()
+            # Also sync to each guild for instant availability
+            for guild in client.guilds:
+                try:
+                    tree.copy_global_to(guild=guild)
+                    await tree.sync(guild=guild)
+                except discord.HTTPException:
+                    pass
         except discord.HTTPException as e:
             print(f"[Bot] Failed to sync commands: {e}")
         _synced = True
-        print("Slash commands synced: /ask /test /train /stop /status /reload /unload /autoreply")
+        print("Slash commands synced: /ask /test /train /stop /status /reload /unload /setchannel /autoreply")
     print(f"Bot ready as {client.user} (ID: {client.user.id})")
 
     channel = await _resolve_channel(CONFIG.channel_id)
