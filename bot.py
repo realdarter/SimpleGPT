@@ -356,12 +356,12 @@ def _load_model_blocking() -> str:
     STATE.device = device
     STATE.gen_args = create_args(
         max_length=512,
-        max_new_tokens=48,
-        max_newlines=1,
-        temperature=0.35,
-        top_k=24,
-        top_p=0.82,
-        repetition_penalty=1.12,
+        max_new_tokens=128,
+        max_newlines=4,
+        temperature=0.8,
+        top_k=50,
+        top_p=0.95,
+        repetition_penalty=1.2,
     )
     STATE.gen_args["auto_correct_input"] = False
     STATE.model_loaded_at = time.time()
@@ -460,18 +460,20 @@ async def _generate_response(prompt: str) -> str:
         await _ensure_model_loaded()
         await asyncio.to_thread(_reduce_host_contention)
 
-        # Yield before GPU work
-        await asyncio.sleep(0)
-
-        result = await asyncio.to_thread(
-            generate_responses,
-            STATE.model,
-            STATE.tokenizer,
-            prompt,
-            device=STATE.device,
-            args=STATE.gen_args,
-            clean_result=True,
-        )
+        try:
+            result = await asyncio.to_thread(
+                generate_responses,
+                STATE.model,
+                STATE.tokenizer,
+                prompt,
+                device=STATE.device,
+                args=STATE.gen_args,
+                clean_result=True,
+            )
+        except Exception as e:
+            print(f"[Generate Error] {e}")
+            traceback.print_exc()
+            result = None
 
         # Free GPU cache after generation
         try:
@@ -892,7 +894,9 @@ async def _autoreply_worker():
             try:
                 # Ensure model is loaded
                 if STATE.model is None:
+                    print("[AutoReply] Loading model...")
                     await _ensure_model_loaded()
+                    print("[AutoReply] Model ready.")
 
                 STATE.last_ask_at = time.time()
                 _reset_idle_timer()
@@ -900,10 +904,9 @@ async def _autoreply_worker():
                 # Give the event loop a moment before heavy GPU work
                 await asyncio.sleep(0.1)
 
+                print(f"[AutoReply] Generating for: {content[:50]}")
                 response = await _generate_response(content)
-
-                # Yield to event loop after GPU work so Discord/OS can breathe
-                await asyncio.sleep(0.1)
+                print(f"[AutoReply] Raw response: {repr(response[:100]) if response else 'None'}")
 
                 # Clear GPU cache after each generation to free VRAM
                 try:
@@ -914,16 +917,18 @@ async def _autoreply_worker():
 
                 response = response.strip() if response else ""
                 if not response or response == "(empty response)":
+                    print("[AutoReply] Empty response, skipping.")
                     continue
 
                 # Replace placeholder names with the actual user who sent the message
                 display_name = message.author.display_name
                 response = _replace_tokens(response, display_name)
+                print(f"[AutoReply] Sending: {response[:100]}")
 
-                # Check again — message might have been deleted during generation
+                # Check if message was deleted during generation
                 try:
                     if not await _message_still_exists(message):
-                        print("[AutoReply] Message deleted during generation, skipping reply.")
+                        print("[AutoReply] Message deleted, skipping.")
                         continue
                 except Exception:
                     continue
@@ -1005,13 +1010,6 @@ async def on_ready() -> None:
     if not _synced:
         try:
             await tree.sync()
-            # Also sync to each guild for instant availability
-            for guild in client.guilds:
-                try:
-                    tree.copy_global_to(guild=guild)
-                    await tree.sync(guild=guild)
-                except discord.HTTPException:
-                    pass
         except discord.HTTPException as e:
             print(f"[Bot] Failed to sync commands: {e}")
         _synced = True
@@ -1051,7 +1049,7 @@ async def on_message(message: discord.Message) -> None:
     if not content or content.startswith("/"):
         return
 
-
+    print(f"[AutoReply] on_message fired: '{content[:50]}' in channel {message.channel.id} (target: {STATE.auto_reply_channel_id})")
 
     if STATE.reply_queue is not None:
         if STATE.reply_queue.full():

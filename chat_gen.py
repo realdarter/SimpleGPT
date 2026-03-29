@@ -34,6 +34,8 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="transformers")
 warnings.filterwarnings("ignore", message=".*not running the flash-attention implementation.*")
 warnings.filterwarnings("ignore", message=".*rope_parameters.*original_max_position_embeddings.*")
 warnings.filterwarnings("ignore", message=".*torch_dtype.*is deprecated.*")
+warnings.filterwarnings("ignore", message=".*generation flags are not valid.*")
+warnings.filterwarnings("ignore", message=".*MatMul8bitLt.*cast from.*")
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -845,8 +847,12 @@ def load_model_and_tokenizer(model_directory: str, download: bool = True, for_tr
         )
         model = prepare_model_for_kbit_training(model)
     elif not for_training and device.type == "cuda" and HAS_BNB:
-        load_notes.append("mode=8bit-infer")
-        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+        load_notes.append("mode=4bit-infer")
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+        )
         model = AutoModelForCausalLM.from_pretrained(
             base_model_dir,
             quantization_config=bnb_config,
@@ -2244,16 +2250,29 @@ def _clean_text_runtime(uncleaned_text: str, pad_token: str = "", sep_token: str
     )
     split_text = _re.sub(r"https?://\S+", "", split_text, flags=_re.I)
 
+    # Remove non-ASCII garbage (Cyrillic, CJK, hex byte artifacts)
+    split_text = _re.sub(r'[\u0400-\u04FF\u0500-\u052F]+', '', split_text)  # Cyrillic
+    split_text = _re.sub(r'[\u3000-\u9FFF]+', '', split_text)  # CJK
+    split_text = _re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', split_text)  # control chars
+
+    # Remove stray single characters at end of words/lines (model artifacts)
+    split_text = _re.sub(r'(?<=[a-zA-Z])[A-Z](?=\s|$)', '', split_text)  # random capital after lowercase
+    split_text = _re.sub(r'\s+[a-zA-Z~^`|\\+=/;:]{1}(?:\s|$)', ' ', split_text)  # lone garbage chars
+
     lines = split_text.split('\n')
     cleaned_lines = []
     for line in lines:
         line = _re.sub(r'\s*[~^`|\\]{1,3}$', '', line.rstrip())
         line = _re.sub(r'(?:\s*[\],;:}{)(]{2,}\s*)+', ' ', line).strip()
         line = _re.sub(r'\[[^\]]{0,40}$', '', line).strip()
-        if line:
+        # Remove trailing single non-word char
+        line = _re.sub(r'\s*[a-zA-Z]{1}$', '', line.rstrip())
+        if line and _re.search(r'[a-zA-Z0-9]', line):
             cleaned_lines.append(line)
     split_text = '\n'.join(cleaned_lines)
     split_text = _re.split(r'\s+\|\s+', split_text, maxsplit=1)[0].strip()
+
+    # Take only first 2 lines max
     split_text = '\n'.join(line.strip() for line in split_text.splitlines() if line.strip())
     if split_text:
         split_text = '\n'.join(split_text.splitlines()[:2]).strip()
